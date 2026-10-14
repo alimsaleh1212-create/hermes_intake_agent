@@ -8,7 +8,7 @@ from uuid import UUID
 from app.agents.base import IntakeAgent, IntakeAgentError
 from app.db.repository import IntakeRepository
 from app.guardrails.base import InjectionDetector, Redactor
-from app.schemas.intake import Decision, IntakeCreate, IntakeDetail
+from app.schemas.intake import Decision, IntakeCreate, IntakeDetail, IntakeStatus
 from app.slack.base import SlackNotifier
 
 logger = logging.getLogger(__name__)
@@ -126,4 +126,18 @@ class IntakeService:
         Returns:
             The updated Intake, or ``None`` if nothing changed.
         """
-        raise NotImplementedError
+        status = (
+            IntakeStatus.APPROVED
+            if decision == Decision.APPROVE
+            else IntakeStatus.CHANGES_REQUESTED
+        )
+        decided = await self._repository.apply_decision(intake_id, status, decided_by)
+        if decided is None:
+            return None
+        try:
+            await self._notifier.update_decision(decided)
+        except Exception as error:  # noqa: BLE001 - the decision is already saved
+            logger.error(
+                "Slack update failed for Intake %s: %s", intake_id, type(error).__name__
+            )
+        return decided
