@@ -37,3 +37,11 @@ skills:
 gateway:
   api_server:
     max_concurrent_runs: 10
+
+# Groq's gpt-oss models reject the "default" reasoning_effort that Hermes sends for
+# custom endpoints on api.groq.com (HTTP 400, every run fell back). Marking the model
+# as non-reasoning keeps the field off the wire (agent/reasoning_params.py,
+# unset_reasoning_default).
+model_overrides:
+  _default:
+    supports_reasoning: false

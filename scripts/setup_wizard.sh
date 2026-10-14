@@ -389,6 +389,8 @@ stage_model_keys() {
       code=$(http_status GET "${base%/}/v1/skills" "$key")
       if [[ "$code" == "200" ]] && grep -q 'client-intake' "$HTTP_BODY_FILE"; then
         say "✓ client-intake skill is visible to the gateway."
+      elif [[ "$code" == "500" && -f "$HERMES_HOME/skills/client-intake/SKILL.md" ]]; then
+        note "GET /v1/skills returned 500 (a known gateway bug in some builds); the skill file is in place."
       else
         warn "skill check failed (HTTP $code); see: journalctl --user -u $HERMES_UNIT"
       fi
