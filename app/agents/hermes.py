@@ -11,6 +11,7 @@ import logging
 import re
 import time
 from pathlib import Path
+from typing import Any
 
 import httpx
 from pydantic import ValidationError
@@ -130,7 +131,7 @@ class HermesAgent:
             logger.warning("could not stop timed-out hermes run")
 
     def _to_result(
-        self, output: IntakeOutput, body: dict, started: float
+        self, output: IntakeOutput, body: dict[str, Any], started: float
     ) -> AgentResult:
         runtime = body.get("runtime") or {}
         usage = body.get("usage") or {}

@@ -16,9 +16,22 @@ class NoopNotifier:
     """``SlackNotifier`` that posts nothing; used when Slack isn't configured."""
 
     async def post_intake_ready(self, intake: IntakeDetail) -> str | None:
+        """Post nothing.
+
+        Args:
+            intake: The Intake that is ready (ignored).
+
+        Returns:
+            Always ``None``: there is no Slack message.
+        """
         return None
 
     async def update_decision(self, intake: IntakeDetail) -> None:
+        """Edit nothing.
+
+        Args:
+            intake: The decided Intake (ignored).
+        """
         return None
 
 
@@ -30,6 +43,14 @@ class SlackWebNotifier:
         self._channel_id = channel_id
 
     async def post_intake_ready(self, intake: IntakeDetail) -> str | None:
+        """Post the "intake ready" message with Approve and Request changes buttons.
+
+        Args:
+            intake: The Intake now awaiting approval.
+
+        Returns:
+            The Slack message timestamp (``ts``), used later to edit the message.
+        """
         output = intake.output
         systems = len(output.current_systems) if output else 0
         issues = sum(v.verdict == "no" for v in output.feasibility) if output else 0
@@ -72,6 +93,11 @@ class SlackWebNotifier:
         return str(response["ts"])
 
     async def update_decision(self, intake: IntakeDetail) -> None:
+        """Replace the buttons with the decision and who made it.
+
+        Args:
+            intake: The decided Intake; nothing happens if it has no ``slack_ts``.
+        """
         if intake.slack_ts is None:
             return
         label = (
