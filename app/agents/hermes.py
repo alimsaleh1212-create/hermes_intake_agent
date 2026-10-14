@@ -16,9 +16,11 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
-from app.agents.base import AgentResult, AgentUsage, IntakeAgent
+from app.agents.base import AgentResult, AgentUsage, IntakeAgent, elapsed_ms
+from app.agents.prompts import build_user_prompt
 from app.core.config import Settings
 from app.llm.base import SECONDARY, LLMClient
+from app.llm.pricing import estimate_cost_usd
 from app.schemas.intake import IntakeOutput
 
 logger = logging.getLogger(__name__)
@@ -73,7 +75,7 @@ class HermesAgent:
     async def run(self, transcript_redacted: str) -> AgentResult:
         """Run Layer 1 (Hermes); on any failure run Layer 2 (secondary model)."""
         started = time.monotonic()
-        user_prompt = f"<transcript>\n{transcript_redacted}\n</transcript>"
+        user_prompt = build_user_prompt(transcript_redacted)
         try:
             return await self._run_hermes(user_prompt, started)
         except (_HermesRunError, httpx.HTTPError, TimeoutError) as exc:
@@ -146,8 +148,10 @@ class HermesAgent:
                 and model != self._settings.groq_model,
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
-                duration_ms=_elapsed_ms(started),
-                est_cost_usd=self._estimate_cost(model, tokens_in, tokens_out),
+                duration_ms=elapsed_ms(started),
+                est_cost_usd=estimate_cost_usd(
+                    self._settings.model_prices, model, tokens_in, tokens_out
+                ),
             ),
         )
 
@@ -162,24 +166,15 @@ class HermesAgent:
                 fallback_used=True,
                 tokens_in=result.tokens_in,
                 tokens_out=result.tokens_out,
-                duration_ms=_elapsed_ms(started),
-                est_cost_usd=self._estimate_cost(
-                    result.model, result.tokens_in, result.tokens_out
+                duration_ms=elapsed_ms(started),
+                est_cost_usd=estimate_cost_usd(
+                    self._settings.model_prices,
+                    result.model,
+                    result.tokens_in,
+                    result.tokens_out,
                 ),
             ),
         )
-
-    def _estimate_cost(self, model: str, tokens_in: int, tokens_out: int) -> float:
-        price = self._settings.model_prices.get(model)
-        if price is None:
-            return 0.0
-        return (
-            tokens_in * price.input_per_mtok + tokens_out * price.output_per_mtok
-        ) / 1_000_000
-
-
-def _elapsed_ms(started: float) -> int:
-    return int((time.monotonic() - started) * 1000)
 
 
 def build_hermes_agent(

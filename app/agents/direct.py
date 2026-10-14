@@ -8,7 +8,8 @@ import time
 
 import httpx
 
-from app.agents.base import AgentResult, AgentUsage, IntakeAgent
+from app.agents.base import AgentResult, AgentUsage, IntakeAgent, elapsed_ms
+from app.agents.prompts import build_user_prompt
 from app.core.config import ModelPrice, Settings
 from app.llm.base import PRIMARY, LLMClient
 from app.llm.pricing import estimate_cost_usd
@@ -35,11 +36,6 @@ reason). Use "no" only when the integration cannot be done.
 """
 
 
-def build_user_prompt(transcript_redacted: str) -> str:
-    """Wrap the Redacted Transcript in ``<transcript>`` tags."""
-    return f"<transcript>\n{transcript_redacted}\n</transcript>"
-
-
 class DirectAgent:
     """Runs the Intake through ``LLMClient``, primary then secondary."""
 
@@ -62,7 +58,7 @@ class DirectAgent:
             fallback_used=result.position != PRIMARY,
             tokens_in=result.tokens_in,
             tokens_out=result.tokens_out,
-            duration_ms=int((time.monotonic() - started) * 1000),
+            duration_ms=elapsed_ms(started),
             cost_usd=0.0,  # free tiers charge nothing
             est_cost_usd=estimate_cost_usd(
                 self._prices, result.model, result.tokens_in, result.tokens_out
