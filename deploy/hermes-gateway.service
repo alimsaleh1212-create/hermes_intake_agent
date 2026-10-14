@@ -1,0 +1,24 @@
+# TEMPLATE system unit for the Hermes gateway. The setup wizard installs the gateway
+# as a user service with `hermes gateway install`; use this file only for a
+# system-wide install. Before copying it to /etc/systemd/system/, replace
+# __SERVICE_USER__ with the non-root user that ran the Hermes installer and
+# __HOME__ with that user's home directory (the binary is __HOME__/.local/bin/hermes,
+# where the installer puts it). Do NOT add an ExecStopPost kill -9.
+[Unit]
+Description=Hermes Agent gateway (API server on 127.0.0.1:8642)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+WorkingDirectory=__HOME__
+Environment=PATH=__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=__HOME__/.local/bin/hermes gateway
+Restart=always
+RestartSec=5
+KillMode=mixed
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

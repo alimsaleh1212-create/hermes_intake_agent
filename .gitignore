@@ -1,3 +1,19 @@
 .env
 .env.*
 !.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+.claude/worktrees/
+
+# dashboard
+dashboard/node_modules/
+dashboard/dist/
