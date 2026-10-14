@@ -48,15 +48,28 @@ dashboard/                # React (Vite) dashboard
 
 Status lifecycle: `processing` → `awaiting_approval` → `approved` | `changes_requested`; any agent failure after both models → `failed`.
 
-<!-- TODO(#4, #5): two-layer Fallback summary (ADR 0001), models, Estimated Cost. -->
+<!-- TODO(#4): models, Estimated Cost. -->
+
+**Hermes agent and Fallback (#5).** With `HERMES_ENABLED=true` the service starts a run on the Hermes gateway (`POST /v1/runs`, then polls `GET /v1/runs/{id}`), sending the `client-intake` skill text as `instructions` and the Redacted Transcript in `<transcript>` tags. `model_used` and `fallback_used` come from the run's `runtime.model` (Layer 1, Hermes' own `fallback_providers`). If there is no answer in 60 s, the output fails Intake Output validation, the run fails, or the gateway is unreachable, the service calls the secondary model directly through `LLMClient` (Layer 2, `fallback_used=true`, no retry on the primary). See ADR 0001.
+
+Files for the setup wizard: the skill is `app/agents/assets/client-intake/SKILL.md` (install to `~/.hermes/skills/client-intake/SKILL.md`) and the config is `app/agents/assets/hermes-config.yaml.template` (install to `~/.hermes/config.yaml`; secrets and `API_SERVER_ENABLED=true` go in `~/.hermes/.env`).
 
 ## Security & least privilege
 
-<!-- TODO(#3, #5, #6): redaction before model/DB/logs, Injection Flag, transcript-as-data prompt, no Hermes toolsets, schema validation, API key, CORS, EU region, Slack signature checks. -->
+**Hermes has no tools.** The config template sets `platform_toolsets.api_server: []` and `agent.disabled_toolsets`, so even a successful prompt injection cannot act: the model can only return text, which is schema-validated and then approved by a person in Slack. The template also sets `api_max_retries: 0` and `auto_recovery_cycles: 0` so Hermes cannot exceed the 60 s budget.
+
+<!-- TODO(#3, #6): redaction before model/DB/logs, Injection Flag, transcript-as-data prompt, no Hermes toolsets, schema validation, API key, CORS, EU region, Slack signature checks. -->
 
 ## Setup wizard
 
-<!-- TODO(#10): link and summary of the setup wizard for human-only steps. -->
+[`scripts/setup_wizard.sh`](scripts/setup_wizard.sh) walks you through the steps only a human can do. It opens each URL, captures each value (secrets are read hidden and never printed) and updates `.env` in place without touching other keys.
+
+```bash
+scripts/setup_wizard.sh local    # stages 1-3: Hermes install/config/skill/gateway, Groq + OpenRouter keys, OpenRouter privacy
+scripts/setup_wizard.sh deploy   # stages 4-8: Slack app, Supabase, GCP VM + Caddy, Vercel dashboard, optional cloudflared tunnel
+```
+
+The local stages are enough to start the e2e before any deploy. Re-running is safe: existing values and generated keys are reused.
 
 ## Deploy
 

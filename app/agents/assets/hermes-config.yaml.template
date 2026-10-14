@@ -1,0 +1,38 @@
+# Hermes config template for the Intake service. The setup wizard copies this to
+# ~/.hermes/config.yaml. Secrets (GROQ_API_KEY, OPENROUTER_API_KEY, API_SERVER_KEY)
+# and API_SERVER_ENABLED=true go in ~/.hermes/.env, never here.
+# Install the skill at ~/.hermes/skills/client-intake/SKILL.md.
+
+providers:
+  groq:                          # custom OpenAI-compatible provider
+    api: https://api.groq.com/openai/v1
+    key_env: GROQ_API_KEY
+
+model:
+  provider: custom:groq
+  default: openai/gpt-oss-120b
+
+# Layer 1 Fallback (ADR 0001): Hermes switches model within a run.
+fallback_providers:
+  - provider: openrouter         # needs OPENROUTER_API_KEY in ~/.hermes/.env
+    model: nvidia/nemotron-3-super-120b-a12b:free
+
+# Least privilege: the agent has no tools, so a successful prompt injection
+# cannot act. An explicit empty list means no toolsets for the API server.
+platform_toolsets:
+  api_server: []
+
+agent:
+  # Belt and braces, applied last.
+  disabled_toolsets: [terminal, file, web, browser, memory, skills, code_execution, delegation, cronjob, todo, vision, image_gen, tts, session_search, clarify, search, computer_use, connections]
+  # Keep Hermes inside the service's 60 s budget: hand off to the fallback on
+  # the first transient error and never sleep through recovery cycles.
+  api_max_retries: 0
+  auto_recovery_cycles: 0
+
+skills:
+  auto_load: [client-intake]     # the service also sends the skill text as `instructions`
+
+gateway:
+  api_server:
+    max_concurrent_runs: 10

@@ -8,7 +8,7 @@ from uuid import UUID
 from app.agents.base import IntakeAgent, IntakeAgentError
 from app.db.repository import IntakeRepository
 from app.guardrails.base import InjectionDetector, Redactor
-from app.schemas.intake import Decision, IntakeCreate, IntakeDetail
+from app.schemas.intake import Decision, IntakeCreate, IntakeDetail, IntakeStatus
 from app.slack.base import SlackNotifier
 
 logger = logging.getLogger(__name__)
@@ -59,12 +59,22 @@ class IntakeService:
         not failed, return it with ``created=False`` and store nothing.
         """
         transcript_redacted = self._redactor.redact(request.transcript)
+        transcript_hash = hash_transcript(transcript_redacted)
+        existing = await self._repository.find_latest_by_hash(transcript_hash)
+        if existing is not None and existing.status != IntakeStatus.FAILED:
+            logger.info(
+                "Duplicate submission: returning Intake %s (status=%s)",
+                existing.id,
+                existing.status,
+            )
+            return Submission(intake=existing, created=False)
         intake = await self._repository.create(
             client_name=request.client_name,
             transcript_redacted=transcript_redacted,
-            transcript_hash=hash_transcript(transcript_redacted),
+            transcript_hash=transcript_hash,
             injection_flagged=self._detector.is_flagged(transcript_redacted),
         )
+        logger.info("Intake %s submitted (status=%s)", intake.id, intake.status)
         return Submission(intake=intake, created=True)
 
     async def process(self, intake_id: UUID) -> None:
@@ -83,6 +93,7 @@ class IntakeService:
             result = await self._agent.run(intake.transcript_redacted)
         except IntakeAgentError as error:
             await self._repository.mark_failed(intake_id, str(error))
+            logger.error("Intake %s failed: %s", intake_id, error)
             return
         except Exception as error:  # noqa: BLE001 - never leave it in processing
             # Only the type name: messages (e.g. validation errors) may echo text.
@@ -93,6 +104,14 @@ class IntakeService:
             return
         ready = await self._repository.complete(intake_id, result.output, result.usage)
         if ready is not None:
+            logger.info(
+                "Intake %s status=%s cost_usd=%s est_cost_usd=%s duration_ms=%s",
+                ready.id,
+                ready.status,
+                ready.cost_usd,
+                ready.est_cost_usd,
+                ready.duration_ms,
+            )
             await self._announce(ready)
 
     async def _announce(self, intake: IntakeDetail) -> None:
@@ -126,4 +145,18 @@ class IntakeService:
         Returns:
             The updated Intake, or ``None`` if nothing changed.
         """
-        raise NotImplementedError
+        status = (
+            IntakeStatus.APPROVED
+            if decision == Decision.APPROVE
+            else IntakeStatus.CHANGES_REQUESTED
+        )
+        decided = await self._repository.apply_decision(intake_id, status, decided_by)
+        if decided is None:
+            return None
+        try:
+            await self._notifier.update_decision(decided)
+        except Exception as error:  # noqa: BLE001 - the decision is already saved
+            logger.error(
+                "Slack update failed for Intake %s: %s", intake_id, type(error).__name__
+            )
+        return decided

@@ -23,9 +23,24 @@ SECONDARY_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 
 
 def _default_model_prices() -> dict[str, ModelPrice]:
-    # Placeholders. #4 replaces them with the providers' published paid prices
-    # (with source URLs); never guess these numbers.
-    return {PRIMARY_MODEL: ModelPrice(), SECONDARY_MODEL: ModelPrice()}
+    """Published paid prices in USD per million tokens, retrieved 2026-10-14.
+
+    Sources:
+    - Groq ``openai/gpt-oss-120b``: $0.15 input / $0.60 output.
+      https://console.groq.com/docs/model/openai/gpt-oss-120b
+      https://console.groq.com/docs/models
+    - OpenRouter ``nvidia/nemotron-3-super-120b-a12b`` (the paid sibling of the
+      ``:free`` model): $0.08 input / $0.45 output, the model-level listed price
+      (``pricing.prompt`` 0.00000008, ``pricing.completion`` 0.00000045 per token).
+      https://openrouter.ai/api/v1/models
+      https://openrouter.ai/api/v1/models/nvidia/nemotron-3-super-120b-a12b/endpoints
+
+    Reasoning tokens are billed as output and are included in completion tokens.
+    """
+    return {
+        PRIMARY_MODEL: ModelPrice(input_per_mtok=0.15, output_per_mtok=0.60),
+        SECONDARY_MODEL: ModelPrice(input_per_mtok=0.08, output_per_mtok=0.45),
+    }
 
 
 class Settings(BaseSettings):
