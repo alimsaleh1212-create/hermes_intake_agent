@@ -7,7 +7,7 @@ Layer 2 safety net (starting at ``SECONDARY``); see ADR 0001.
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.agents.base import IntakeAgentError
+from app.core.errors import IntakeAgentError
 from app.schemas.intake import IntakeOutput
 
 PRIMARY = 0

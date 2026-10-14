@@ -1,9 +1,24 @@
 """The ``IntakeAgent`` contract: Redacted Transcript in, Intake Output and usage out."""
 
+import time
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.core.errors import IntakeAgentError
 from app.schemas.intake import IntakeOutput
+
+__all__ = [
+    "AgentResult",
+    "AgentUsage",
+    "IntakeAgent",
+    "IntakeAgentError",
+    "elapsed_ms",
+]
+
+
+def elapsed_ms(started: float) -> int:
+    """Milliseconds since ``started`` (a ``time.monotonic()`` reading)."""
+    return int((time.monotonic() - started) * 1000)
 
 
 @dataclass(frozen=True)
@@ -36,14 +51,6 @@ class AgentResult:
 
     output: IntakeOutput
     usage: AgentUsage
-
-
-class IntakeAgentError(Exception):
-    """Raised when no model could produce a valid Intake Output.
-
-    The service turns this into a ``failed`` Intake with ``str(error)`` stored, so
-    the message must never contain Transcript text.
-    """
 
 
 class IntakeAgent(Protocol):
