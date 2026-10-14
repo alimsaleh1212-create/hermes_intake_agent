@@ -1,0 +1,11 @@
+# Second override: force a Fallback by making the primary unusable.
+# Direct mode: an invalid Groq key makes Groq answer 401, so LLMClient moves on.
+# Hermes mode: the Groq key Hermes uses lives in ~/.hermes/.env, so instead the
+# gateway URL is pointed at a dead port and Layer 2 (secondary model) takes over.
+services:
+  api:
+    environment:
+      GROQ_API_KEY: invalid-key-for-e2e-fallback
+      groq_api_key: invalid-key-for-e2e-fallback
+      HERMES_BASE_URL: http://127.0.0.1:9
+      hermes_base_url: http://127.0.0.1:9

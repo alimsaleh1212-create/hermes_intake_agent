@@ -1,0 +1,15 @@
+# Compose override for the e2e suite (used with `-f compose.yaml -f this`).
+# Test-only values arrive through the process environment, never `.env`.
+# Each key is set in both cases because pydantic-settings is case-insensitive and
+# `.env` may use either (compose `environment:` beats `env_file:`).
+services:
+  api:
+    environment:
+      DATABASE_URL: postgresql+asyncpg://intake:intake@127.0.0.1:5432/intake
+      INTAKE_API_KEY: ${E2E_INTAKE_API_KEY:?set by tests/e2e/conftest.py}
+      intake_api_key: ${E2E_INTAKE_API_KEY}
+      SLACK_SIGNING_SECRET: ${E2E_SLACK_SIGNING_SECRET:?set by tests/e2e/conftest.py}
+      slack_signing_secret: ${E2E_SLACK_SIGNING_SECRET}
+      HERMES_ENABLED: ${E2E_HERMES_ENABLED:-false}
+      hermes_enabled: ${E2E_HERMES_ENABLED:-false}
+      LOG_LEVEL: INFO
