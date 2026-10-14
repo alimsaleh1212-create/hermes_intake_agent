@@ -6,8 +6,6 @@ Hermes involved: the escape hatch and the Layer 2 path of ADR 0001.
 
 import time
 
-import httpx
-
 from app.agents.base import AgentResult, AgentUsage, IntakeAgent, elapsed_ms
 from app.agents.prompts import build_user_prompt
 from app.core.config import ModelPrice, Settings
@@ -67,8 +65,6 @@ class DirectAgent:
         return AgentResult(output=result.output, usage=usage)
 
 
-def build_direct_agent(
-    settings: Settings, http_client: httpx.AsyncClient, llm_client: LLMClient
-) -> IntakeAgent:
+def build_direct_agent(settings: Settings, llm_client: LLMClient) -> IntakeAgent:
     """Return the agent that calls the models directly, primary then secondary."""
     return DirectAgent(llm_client, settings.model_prices)

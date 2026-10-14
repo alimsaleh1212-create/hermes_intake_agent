@@ -55,14 +55,14 @@ def get_agent(
     return build_agent(settings, http_client)
 
 
-def get_redactor(settings: SettingsDep) -> Redactor:
+def get_redactor() -> Redactor:
     """The configured ``Redactor``."""
-    return build_redactor(settings)
+    return build_redactor()
 
 
-def get_injection_detector(settings: SettingsDep) -> InjectionDetector:
+def get_injection_detector() -> InjectionDetector:
     """The configured ``InjectionDetector``."""
-    return build_injection_detector(settings)
+    return build_injection_detector()
 
 
 def get_notifier(
