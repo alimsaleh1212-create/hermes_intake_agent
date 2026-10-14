@@ -281,7 +281,7 @@ stage_hermes() {
     fi
   fi
   if command -v hermes >/dev/null 2>&1; then
-    if hermes doctor >/dev/null 2>&1; then say "hermes doctor: ok"; else warn "hermes doctor reported problems; run it by hand"; fi
+    if hermes doctor </dev/null >/dev/null 2>&1; then say "hermes doctor: ok"; else warn "hermes doctor reported problems; run it by hand"; fi
   fi
 
   mkdir -p "$HERMES_HOME/skills/client-intake"
@@ -335,8 +335,12 @@ stage_model_keys() {
   local i code="000" base key
   if command -v hermes >/dev/null 2>&1; then
     say "Starting the Hermes gateway (user service)."
-    hermes gateway install >/dev/null 2>&1 || true
-    hermes gateway restart >/dev/null 2>&1 || hermes gateway start >/dev/null 2>&1 || warn "could not start the gateway; run: hermes gateway start"
+    # Flags answer install's prompts; </dev/null makes any other prompt fail fast
+    # instead of waiting invisibly on the terminal.
+    hermes gateway install --if-missing --no-start-now --start-on-login </dev/null >/dev/null 2>&1 \
+      || warn "gateway install failed; run: hermes gateway install"
+    hermes gateway restart </dev/null >/dev/null 2>&1 || hermes gateway start </dev/null >/dev/null 2>&1 \
+      || warn "could not start the gateway; run: hermes gateway start"
     note "On a headless VM also run: sudo loginctl enable-linger \$USER"
     base=$(env_read "$ENV_FILE" HERMES_BASE_URL || echo http://127.0.0.1:8642)
     key=$(env_read "$HERMES_ENV" API_SERVER_KEY || true)
