@@ -16,10 +16,14 @@ Mike: Not really. I can see clicks in Google Ads, but I couldn't tell you which 
 
 Agency: Okay. Who controls the website and the domain?
 
-Mike: A guy set up the WordPress site a few years ago. I have the login. The domain is in my name, I think it's with GoDaddy.
+Mike: A guy set up the WordPress site a few years ago. I have the login. The domain is in my name.
 
-Agency: Perfect. Last one: would you want to keep using your personal cell as the business number?
+Agency: Perfect. One idea is an automatic text-back: when you miss a call, the caller gets a text right away saying you'll call them back. Would that help?
 
-Mike: I'd rather keep my cell, it's what's on the trucks. But I just don't want to miss calls anymore.
+Mike: Yes, that's exactly it. But I want that text to be sent by my own personal cell number, as a normal text from my phone's carrier plan. That's the number on the trucks and everybody knows it. I don't want a new number, no forwarding, no business line, no app.
+
+Agency: Understood, we'll check whether that's possible.
+
+Mike: Thanks. I just don't want to miss calls anymore.
 
 Agency: Understood. We'll put together a plan and an access checklist and come back to you this week.
