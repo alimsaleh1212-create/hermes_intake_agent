@@ -39,6 +39,7 @@ export interface IntakeSummary {
   error: string | null;
   model_used: string | null;
   fallback_used: boolean;
+  fallback_reason: string | null;
   injection_flagged: boolean;
   tokens_in: number | null;
   tokens_out: number | null;

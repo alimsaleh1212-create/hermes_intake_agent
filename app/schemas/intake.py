@@ -113,6 +113,7 @@ class IntakeSummary(BaseModel):
     error: str | None = None
     model_used: str | None = None
     fallback_used: bool = False
+    fallback_reason: str | None = None
     injection_flagged: bool = False
     tokens_in: int | None = None
     tokens_out: int | None = None

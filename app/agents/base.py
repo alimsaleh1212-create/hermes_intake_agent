@@ -34,6 +34,8 @@ class AgentUsage:
         duration_ms: Wall-clock time of the whole agent call.
         cost_usd: Actual cost (0 on free tiers).
         est_cost_usd: Estimated Cost at the providers' published paid prices.
+        fallback_reason: Short code for why the primary was left (``timeout``,
+            ``invalid_output``, ``provider 429`` ...). Never Transcript text.
     """
 
     model_used: str
@@ -43,6 +45,7 @@ class AgentUsage:
     duration_ms: int
     cost_usd: float = 0.0
     est_cost_usd: float = 0.0
+    fallback_reason: str | None = None
 
 
 @dataclass(frozen=True)

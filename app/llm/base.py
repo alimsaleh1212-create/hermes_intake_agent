@@ -24,6 +24,8 @@ class LLMResult:
         position: Index in the provider list that answered (``PRIMARY`` = 0).
         tokens_in: Prompt tokens reported by the provider.
         tokens_out: Completion tokens reported by the provider.
+        fallback_reason: Why the first provider tried in this call failed, as a
+            short code, or ``None`` when it answered.
     """
 
     output: IntakeOutput
@@ -31,6 +33,7 @@ class LLMResult:
     position: int
     tokens_in: int
     tokens_out: int
+    fallback_reason: str | None = None
 
 
 class AllModelsFailedError(IntakeAgentError):

@@ -61,6 +61,7 @@ def test_submit_demo_transcripts(stack: Stack, transcript) -> None:
         assert detail["fallback_used"] is False, (
             key,
             detail["model_used"],
+            detail["fallback_reason"],
             [ln for ln in stack.logs().splitlines() if "provider" in ln],
         )
         assert _is_primary(detail["model_used"]), detail["model_used"]

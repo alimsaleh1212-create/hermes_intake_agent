@@ -18,6 +18,7 @@ SPEC_COLUMNS = {
     "error",
     "model_used",
     "fallback_used",
+    "fallback_reason",
     "injection_flagged",
     "tokens_in",
     "tokens_out",

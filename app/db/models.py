@@ -49,6 +49,7 @@ class IntakeRow(Base):
     error: Mapped[str | None] = mapped_column(Text)
     model_used: Mapped[str | None] = mapped_column(String(200))
     fallback_used: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    fallback_reason: Mapped[str | None] = mapped_column(Text)
     injection_flagged: Mapped[bool] = mapped_column(Boolean, server_default=false())
     tokens_in: Mapped[int | None] = mapped_column(Integer)
     tokens_out: Mapped[int | None] = mapped_column(Integer)

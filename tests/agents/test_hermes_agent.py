@@ -1,6 +1,7 @@
 """Seam 2: the Hermes-backed ``IntakeAgent`` with a faked gateway (MockTransport)."""
 
 import json
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -190,3 +191,65 @@ async def test_both_layers_failing_raises_without_transcript_text() -> None:
     with pytest.raises(IntakeAgentError) as exc:
         await agent.run(TRANSCRIPT)
     assert "WordPress" not in str(exc.value)
+
+
+async def test_normal_run_has_no_fallback_reason() -> None:
+    gateway = FakeGateway(completed(PRIMARY_MODEL))
+    result = await make_agent(gateway, FakeLLMClient()).run(TRANSCRIPT)
+    assert result.usage.fallback_reason is None
+
+
+async def test_timeout_records_reason() -> None:
+    result = await make_agent(FakeGateway(final=None), FakeLLMClient(), 0.1).run(
+        TRANSCRIPT
+    )
+    assert result.usage.fallback_reason == "timeout"
+
+
+async def test_invalid_output_records_reason() -> None:
+    gateway = FakeGateway(completed(PRIMARY_MODEL, '{"current_systems": "nope"}'))
+    result = await make_agent(gateway, FakeLLMClient()).run(TRANSCRIPT)
+    assert result.usage.fallback_reason == "invalid_output"
+
+
+async def test_unreachable_gateway_records_reason() -> None:
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused")
+
+    result = await make_agent(refuse, FakeLLMClient()).run(TRANSCRIPT)
+    assert result.usage.fallback_reason == "gateway_unreachable"
+
+
+async def test_gateway_http_error_records_status() -> None:
+    result = await make_agent(lambda request: httpx.Response(502), FakeLLMClient()).run(
+        TRANSCRIPT
+    )
+    assert result.usage.fallback_reason == "gateway_http_502"
+
+
+async def test_failed_run_records_and_logs_the_hermes_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    failed = {
+        "run_id": "run_1",
+        "status": "failed",
+        "error": "HTTP 400: reasoning_effort is not supported" + "!" * 400,
+    }
+    with caplog.at_level(logging.WARNING):
+        result = await make_agent(FakeGateway(failed), FakeLLMClient()).run(TRANSCRIPT)
+
+    reason = result.usage.fallback_reason
+    assert reason is not None
+    assert reason.startswith("hermes_run_failed: ")
+    assert "reasoning_effort is not supported" in reason
+    assert len(reason) <= len("hermes_run_failed: ") + 200
+    logged = " ".join(record.getMessage() for record in caplog.records)
+    assert "reasoning_effort is not supported" in logged
+    assert "failed" in logged
+    assert "WordPress" not in logged
+
+
+async def test_failed_run_without_error_text_still_records_status() -> None:
+    failed = {"run_id": "run_1", "status": "failed"}
+    result = await make_agent(FakeGateway(failed), FakeLLMClient()).run(TRANSCRIPT)
+    assert result.usage.fallback_reason == "hermes_run_failed: failed"

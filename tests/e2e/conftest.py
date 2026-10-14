@@ -29,21 +29,64 @@ import asyncpg
 import httpx
 import pytest
 
+from tests.e2e.preflight import env_file_problems, hermes_problems
+
 ROOT = Path(__file__).resolve().parents[2]
 API_URL = "http://127.0.0.1:8000"
 DEFAULT_HERMES_URL = "http://127.0.0.1:8643"
 
 
-def hermes_base_url() -> str:
-    """The configured Hermes URL: environment, then ``.env`` (this one key only)."""
-    value = os.environ.get("HERMES_BASE_URL")
+def _setting(key: str) -> str | None:
+    """One setting: environment, then ``.env`` (this key only, never printed)."""
+    value = os.environ.get(key)
     env_file = ROOT / ".env"
     if not value and env_file.is_file():
         for line in env_file.read_text().splitlines():
             name, _, raw = line.partition("=")
-            if name.strip().upper() == "HERMES_BASE_URL":
+            if name.strip().upper() == key:
                 value = raw.strip().strip("'\"")
-    return (value or DEFAULT_HERMES_URL).rstrip("/")
+    return value
+
+
+def hermes_base_url() -> str:
+    """The configured Hermes URL: environment, then ``.env`` (this one key only)."""
+    return (_setting("HERMES_BASE_URL") or DEFAULT_HERMES_URL).rstrip("/")
+
+
+def preflight(hermes: bool) -> None:
+    """Fail fast, with a clear message, before the stack is built and models called.
+
+    Checks every mode's ``.env`` format and, in Hermes mode, that the gateway has no
+    enabled toolsets and is configured for Groq ``openai/gpt-oss-120b``. Messages
+    never contain ``.env`` or key values.
+    """
+    problems: list[str] = []
+    env_file = ROOT / ".env"
+    if env_file.is_file():
+        problems += [
+            f".env {problem}" for problem in env_file_problems(env_file.read_text())
+        ]
+    if hermes:
+        try:
+            response = httpx.get(
+                f"{hermes_base_url()}/v1/toolsets",
+                headers={"Authorization": f"Bearer {_setting('HERMES_API_KEY') or ''}"},
+                timeout=5,
+            )
+        except httpx.HTTPError:
+            problems.append("Hermes /v1/toolsets could not be read")
+        else:
+            home = Path(os.environ.get("INTAKE_HERMES_HOME", "~/.hermes-intake"))
+            config = home.expanduser() / "config.yaml"
+            if response.status_code != 200:
+                problems.append(f"Hermes /v1/toolsets returned {response.status_code}")
+            else:
+                problems += hermes_problems(
+                    response.text,
+                    config.read_text() if config.is_file() else None,
+                )
+    if problems:
+        pytest.fail("e2e preflight failed:\n- " + "\n- ".join(problems), pytrace=False)
 
 
 DB_DSN = "postgresql://intake:intake@127.0.0.1:5432/intake"
@@ -152,6 +195,7 @@ def stack() -> Iterator[Stack]:
         pytest.fail(
             f"HERMES_ENABLED=true but the gateway is not up on {hermes_base_url()}"
         )
+    preflight(hermes)
     state = Stack(
         api_key=secrets.token_hex(16),
         slack_secret=secrets.token_hex(16),

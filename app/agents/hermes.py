@@ -30,8 +30,33 @@ _TERMINAL = {"completed", "failed", "cancelled", "interrupted"}
 _FENCE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 
 
+_REASON_DETAIL_CHARS = 200
+
+
 class _HermesRunError(Exception):
-    """A Layer 1 failure that sends the Intake to Layer 2. Carries no Transcript."""
+    """A Layer 1 failure that sends the Intake to Layer 2. Carries no Transcript.
+
+    ``reason`` is the short code stored as the Intake's ``fallback_reason``.
+    """
+
+    def __init__(self, message: str, reason: str | None = None) -> None:
+        super().__init__(message)
+        self.reason = reason or message
+
+
+def _layer1_failure(exc: Exception) -> tuple[str, str]:
+    """Return ``(reason, log_message)`` for a Layer 1 failure.
+
+    Neither string contains Transcript, prompt or output text.
+    """
+    if isinstance(exc, _HermesRunError):
+        return exc.reason, str(exc)
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        return f"gateway_http_{code}", str(exc)
+    if isinstance(exc, TimeoutError | httpx.TimeoutException):
+        return "timeout", f"{type(exc).__name__}: no answer within the budget"
+    return "gateway_unreachable", f"{type(exc).__name__}: {exc}"
 
 
 def load_skill_prompt(path: Path = SKILL_PATH) -> str:
@@ -53,7 +78,9 @@ def _parse_output(raw: object) -> IntakeOutput:
     try:
         return IntakeOutput.model_validate(json.loads(text))
     except (ValueError, ValidationError) as exc:
-        raise _HermesRunError("output failed Intake Output validation") from exc
+        raise _HermesRunError(
+            "output failed Intake Output validation", "invalid_output"
+        ) from exc
 
 
 class HermesAgent:
@@ -79,8 +106,9 @@ class HermesAgent:
         try:
             return await self._run_hermes(user_prompt, started)
         except (_HermesRunError, httpx.HTTPError, TimeoutError) as exc:
-            logger.warning("hermes layer 1 failed (%s); using secondary", type(exc))
-        return await self._run_secondary(user_prompt, started)
+            reason, message = _layer1_failure(exc)
+            logger.warning("hermes layer 1 failed (%s); using secondary", message)
+        return await self._run_secondary(user_prompt, started, reason)
 
     def _headers(self) -> dict[str, str]:
         key = self._settings.hermes_api_key.get_secret_value()
@@ -117,7 +145,13 @@ class HermesAgent:
             raise _HermesRunError("unexpected gateway response") from exc
 
         if body.get("status") != "completed":
-            raise _HermesRunError(f"run ended {body.get('status')}")
+            status = str(body.get("status"))
+            error = body.get("error")
+            detail = str(error) if error else status
+            raise _HermesRunError(
+                f"run ended {status}: {error}" if error else f"run ended {status}",
+                "hermes_run_failed: " + detail[:_REASON_DETAIL_CHARS],
+            )
         output = _parse_output(body.get("output"))
         return self._to_result(output, body, started)
 
@@ -155,7 +189,9 @@ class HermesAgent:
             ),
         )
 
-    async def _run_secondary(self, user_prompt: str, started: float) -> AgentResult:
+    async def _run_secondary(
+        self, user_prompt: str, started: float, reason: str
+    ) -> AgentResult:
         result = await self._llm.complete_intake(
             self._system_prompt, user_prompt, start_at=SECONDARY
         )
@@ -173,6 +209,7 @@ class HermesAgent:
                     result.tokens_in,
                     result.tokens_out,
                 ),
+                fallback_reason=reason,
             ),
         )
 

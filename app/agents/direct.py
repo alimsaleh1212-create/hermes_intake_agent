@@ -61,6 +61,7 @@ class DirectAgent:
             est_cost_usd=estimate_cost_usd(
                 self._prices, result.model, result.tokens_in, result.tokens_out
             ),
+            fallback_reason=result.fallback_reason,
         )
         return AgentResult(output=result.output, usage=usage)
 

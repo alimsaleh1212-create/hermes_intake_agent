@@ -9,7 +9,7 @@ never copied into errors, because they could echo prompt text.
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import httpx
@@ -43,7 +43,14 @@ class Provider:
 
 
 class _ProviderFailure(Exception):
-    """A provider could not give a valid Intake Output (message is a category)."""
+    """A provider could not give a valid Intake Output (message is a category).
+
+    ``reason`` is the short code stored as the Intake's ``fallback_reason``.
+    """
+
+    def __init__(self, message: str, reason: str | None = None) -> None:
+        super().__init__(message)
+        self.reason = reason or message
 
 
 class OpenAICompatLLMClient:
@@ -68,12 +75,17 @@ class OpenAICompatLLMClient:
             AllModelsFailedError: No provider from ``start_at`` onwards succeeded.
         """
         failures: list[str] = []
+        first_reason: str | None = None
         for position in range(start_at, len(self._providers)):
             provider = self._providers[position]
             try:
-                return await self._call(provider, position, system_prompt, user_prompt)
+                result = await self._call(
+                    provider, position, system_prompt, user_prompt
+                )
+                return replace(result, fallback_reason=first_reason)
             except _ProviderFailure as failure:
                 logger.warning("LLM provider %s failed: %s", provider.name, failure)
+                first_reason = first_reason or failure.reason
                 failures.append(f"{provider.model}: {failure}")
         raise AllModelsFailedError("All models failed (" + "; ".join(failures) + ")")
 
@@ -112,11 +124,13 @@ class OpenAICompatLLMClient:
             raise _ProviderFailure("timeout") from error
         except httpx.HTTPError as error:
             raise _ProviderFailure(
-                f"connection error ({type(error).__name__})"
+                f"connection error ({type(error).__name__})", "gateway_unreachable"
             ) from error
 
         if response.status_code != 200:
-            raise _ProviderFailure(f"HTTP {response.status_code}")
+            raise _ProviderFailure(
+                f"HTTP {response.status_code}", f"provider {response.status_code}"
+            )
         try:
             payload = response.json()
         except ValueError as error:
@@ -133,7 +147,7 @@ class OpenAICompatLLMClient:
         try:
             output = IntakeOutput.model_validate_json(content)
         except ValidationError as error:
-            raise _ProviderFailure("invalid Intake Output") from error
+            raise _ProviderFailure("invalid Intake Output", "invalid_output") from error
 
         usage = payload.get("usage") or {}
         return LLMResult(
