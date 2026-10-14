@@ -41,7 +41,12 @@ def database_url() -> Iterator[str]:
 @pytest.fixture
 def settings(database_url: str) -> Settings:
     """Settings for tests: never read the developer's real ``.env``."""
-    return Settings(_env_file=None, database_url=database_url)
+    return Settings(
+        _env_file=None,
+        database_url=database_url,
+        intake_api_key="test-key",
+        cors_origins=["https://dashboard.example.com"],
+    )
 
 
 @pytest.fixture
@@ -74,6 +79,18 @@ async def app(
 @pytest.fixture
 async def api_client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
     """An async HTTP client talking to the app in-process."""
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"X-API-Key": "test-key"},
+    ) as client:
+        yield client
+
+
+@pytest.fixture
+async def anonymous_client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
+    """An async HTTP client that sends no API key."""
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
