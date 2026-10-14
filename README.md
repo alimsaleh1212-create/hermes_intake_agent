@@ -90,4 +90,25 @@ Syntax checks: `systemd-analyze verify deploy/*.service` and `caddy validate --c
 
 ## E2E runbook
 
-<!-- TODO(#11): how to run the e2e suite and the manual Slack click-through. -->
+### Automated e2e (real stack)
+
+`tests/e2e/` drives the real compose stack (`dev` Postgres + API) and real Groq and OpenRouter calls. It is excluded from the default `uv run pytest`.
+
+```bash
+cp .env.example .env     # real keys (the wizard fills this in); no stray lines
+uv run pytest -m e2e tests/e2e -s
+```
+
+- The suite builds and starts compose itself, runs `down -v` at the end (`E2E_KEEP_STACK=1` keeps it), and needs ports 5432 and 8000 free.
+- It generates a throwaway `INTAKE_API_KEY` and `SLACK_SIGNING_SECRET` per run and passes them through the process environment, so `.env` is never edited.
+- Mode: with the Hermes gateway up on `127.0.0.1:8642` it runs through Hermes; otherwise it falls back to `HERMES_ENABLED=false` (direct Groq then OpenRouter). Force one with `HERMES_ENABLED=true|false`. The first line of output says which mode ran.
+- It submits the three demo Transcripts `E2E_SUBMIT_GAP` seconds apart (default 30, Groq free tier allows 8K tokens per minute), so a run takes about 2 to 3 minutes.
+- It checks: valid Intake Output and primary model; Mike's Roofing has 3 Current Systems and 1 Issue (the assertion is strict, and the model may disagree: report the real counts rather than loosening it); PII placeholders with no raw values in API responses, database or API logs; `injection_flagged`; a signed Slack Approve gives `approved` and `approved_by`; and a forced Fallback (invalid Groq key, or in Hermes mode an unreachable gateway so Layer 2 answers) gives `fallback_used=true` with the OpenRouter model.
+
+### Manual Slack click-through (on the VM)
+
+1. Check `.env` on the VM has `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_CHANNEL_ID` and `INTAKE_API_KEY`, and that the Slack app's Interactivity URL is `https://<your-host>/slack/actions`. Then `docker compose up -d --build`.
+2. Submit: `curl -X POST https://<your-host>/intakes -H "X-API-Key: $INTAKE_API_KEY" -H 'Content-Type: application/json' -d "$(jq -n --rawfile t transcripts/mikes_roofing.txt '{client_name:"Mike'"'"'s Roofing",transcript:$t}')"`.
+3. Within about a minute the message appears in the Slack channel with Approve and Request changes buttons.
+4. Click Approve. The message should update to show who approved, and `GET /intakes/<id>` (or the dashboard) shows `approved` with `approved_by` set.
+5. Click again: nothing changes (a decision is final). If the click shows a Slack error, check the signing secret and that Caddy proxies `/slack/actions`.
