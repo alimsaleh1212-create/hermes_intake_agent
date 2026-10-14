@@ -1,0 +1,21 @@
+# System unit for the Hermes gateway. Install as the service user (no root); this
+# mirrors what `sudo hermes gateway install --system` generates. Prefer that command
+# and keep this file as the reviewed reference. Do NOT add an ExecStopPost kill -9.
+[Unit]
+Description=Hermes Agent gateway (API server on 127.0.0.1:8642)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hermes
+WorkingDirectory=/home/hermes
+Environment=PATH=/home/hermes/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/hermes/.local/bin/hermes gateway
+Restart=always
+RestartSec=5
+KillMode=mixed
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
