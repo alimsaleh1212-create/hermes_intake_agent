@@ -102,6 +102,13 @@ def build_slack_client(settings: Settings) -> AsyncWebClient | None:
     return AsyncWebClient(token=token) if token else None
 
 
+async def close_slack_client(client: AsyncWebClient | None) -> None:
+    """Close the client's aiohttp session, if one was ever opened."""
+    session = client.session if client is not None else None
+    if session is not None and not session.closed:
+        await session.close()
+
+
 def build_notifier(
     settings: Settings, slack_client: AsyncWebClient | None
 ) -> SlackNotifier:

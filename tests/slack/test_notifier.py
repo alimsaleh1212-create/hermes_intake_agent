@@ -5,7 +5,12 @@ from typing import Any
 from app.agents.fake import MIKES_ROOFING_OUTPUT
 from app.core.config import Settings
 from app.schemas.intake import IntakeDetail, IntakeStatus
-from app.slack.factory import NoopNotifier, SlackWebNotifier, build_notifier
+from app.slack.factory import (
+    NoopNotifier,
+    SlackWebNotifier,
+    build_notifier,
+    close_slack_client,
+)
 
 
 class FakeSlackClient:
@@ -104,3 +109,19 @@ def test_factory_returns_noop_without_a_client() -> None:
         build_notifier(settings, FakeSlackClient()),  # type: ignore[arg-type]
         SlackWebNotifier,
     )
+
+
+async def test_close_slack_client_closes_an_open_session() -> None:
+    class Session:
+        closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    class Client:
+        session = Session()
+
+    await close_slack_client(Client())  # type: ignore[arg-type]
+    await close_slack_client(None)
+
+    assert Client.session.closed

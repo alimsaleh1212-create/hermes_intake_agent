@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import health, intakes, slack
 from app.core.config import Settings
 from app.db.session import create_engine, create_session_factory
-from app.slack.factory import build_slack_client
+from app.slack.factory import build_slack_client, close_slack_client
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -35,7 +35,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine = create_engine(settings.database_url)
-        app.state.settings = settings
         app.state.session_factory = create_session_factory(engine)
         app.state.http_client = httpx.AsyncClient()
         app.state.slack_client = build_slack_client(settings)
@@ -43,6 +42,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
         finally:
             await app.state.http_client.aclose()
+            await close_slack_client(app.state.slack_client)
             await engine.dispose()
 
     app = FastAPI(title="Hermes Intake API", version="0.1.0", lifespan=lifespan)
