@@ -100,9 +100,17 @@ class IntakeRepository:
     async def complete(
         self, intake_id: UUID, output: IntakeOutput, usage: AgentUsage
     ) -> IntakeDetail | None:
-        """Store the Intake Output and usage and move to ``awaiting_approval``."""
+        """Store the Intake Output and usage and move to ``awaiting_approval``.
+
+        Only applies to an Intake still ``processing``: a late or repeated run
+        never overwrites a decided Intake.
+
+        Returns:
+            The updated Intake, or ``None`` if nothing changed.
+        """
         return await self._update(
             intake_id,
+            only_processing=True,
             status=IntakeStatus.AWAITING_APPROVAL.value,
             output_json=output.model_dump(mode="json"),
             model_used=usage.model_used,
@@ -115,9 +123,16 @@ class IntakeRepository:
         )
 
     async def mark_failed(self, intake_id: UUID, error: str) -> IntakeDetail | None:
-        """Move an Intake to ``failed`` and record the error."""
+        """Move a ``processing`` Intake to ``failed`` and record the error.
+
+        Returns:
+            The updated Intake, or ``None`` if nothing changed.
+        """
         return await self._update(
-            intake_id, status=IntakeStatus.FAILED.value, error=error
+            intake_id,
+            only_processing=True,
+            status=IntakeStatus.FAILED.value,
+            error=error,
         )
 
     async def set_slack_ts(self, intake_id: UUID, slack_ts: str) -> None:
@@ -151,12 +166,14 @@ class IntakeRepository:
             )
             return _to_detail(row) if row else None
 
-    async def _update(self, intake_id: UUID, **values: object) -> IntakeDetail | None:
-        async with self._session_factory() as session, session.begin():
-            row = await session.scalar(
-                update(IntakeRow)
-                .where(IntakeRow.id == intake_id)
-                .values(**values)
-                .returning(IntakeRow)
+    async def _update(
+        self, intake_id: UUID, *, only_processing: bool = False, **values: object
+    ) -> IntakeDetail | None:
+        statement = update(IntakeRow).where(IntakeRow.id == intake_id)
+        if only_processing:
+            statement = statement.where(
+                IntakeRow.status == IntakeStatus.PROCESSING.value
             )
+        async with self._session_factory() as session, session.begin():
+            row = await session.scalar(statement.values(**values).returning(IntakeRow))
             return _to_detail(row) if row else None
