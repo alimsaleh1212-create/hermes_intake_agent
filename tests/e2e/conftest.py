@@ -7,7 +7,9 @@ and passed through the process environment.
 
 Environment knobs:
     HERMES_ENABLED   true/false. Default: true if the gateway answers on
-                     127.0.0.1:8642, otherwise false (direct Groq -> OpenRouter).
+                     the configured Hermes URL (HERMES_BASE_URL in the environment
+                     or .env, default http://127.0.0.1:8643), otherwise false
+                     (direct Groq -> OpenRouter).
     E2E_SUBMIT_GAP   seconds between model calls (default 30; Groq free tier is
                      8K tokens per minute).
     E2E_KEEP_STACK   set to 1 to skip ``down -v`` at the end.
@@ -29,7 +31,21 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 API_URL = "http://127.0.0.1:8000"
-HERMES_HEALTH_URL = "http://127.0.0.1:8642/health"
+DEFAULT_HERMES_URL = "http://127.0.0.1:8643"
+
+
+def hermes_base_url() -> str:
+    """The configured Hermes URL: environment, then ``.env`` (this one key only)."""
+    value = os.environ.get("HERMES_BASE_URL")
+    env_file = ROOT / ".env"
+    if not value and env_file.is_file():
+        for line in env_file.read_text().splitlines():
+            name, _, raw = line.partition("=")
+            if name.strip().upper() == "HERMES_BASE_URL":
+                value = raw.strip().strip("'\"")
+    return (value or DEFAULT_HERMES_URL).rstrip("/")
+
+
 DB_DSN = "postgresql://intake:intake@127.0.0.1:5432/intake"
 COMPOSE_FILES = ["-f", "compose.yaml", "-f", "tests/e2e/compose.e2e.yaml"]
 FALLBACK_FILES = [*COMPOSE_FILES, "-f", "tests/e2e/compose.fallback.yaml"]
@@ -44,7 +60,7 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 
 def _hermes_up() -> bool:
     try:
-        return httpx.get(HERMES_HEALTH_URL, timeout=3).status_code == 200
+        return httpx.get(f"{hermes_base_url()}/health", timeout=3).status_code == 200
     except httpx.HTTPError:
         return False
 
@@ -133,7 +149,9 @@ def stack() -> Iterator[Stack]:
     hermes_env = os.environ.get("HERMES_ENABLED")
     hermes = (hermes_env.lower() == "true") if hermes_env else _hermes_up()
     if hermes and not _hermes_up():
-        pytest.fail("HERMES_ENABLED=true but the gateway is not up on 127.0.0.1:8642")
+        pytest.fail(
+            f"HERMES_ENABLED=true but the gateway is not up on {hermes_base_url()}"
+        )
     state = Stack(
         api_key=secrets.token_hex(16),
         slack_secret=secrets.token_hex(16),

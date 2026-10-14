@@ -49,3 +49,13 @@ def test_env_example_lists_every_setting() -> None:
     }
 
     assert set(Settings.model_fields) - documented == set()
+
+
+def test_hermes_url_defaults_to_the_dedicated_intake_gateway(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HERMES_BASE_URL", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.hermes_base_url == "http://127.0.0.1:8643"

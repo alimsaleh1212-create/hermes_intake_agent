@@ -52,7 +52,7 @@ Status lifecycle: `processing` → `awaiting_approval` → `approved` | `changes
 
 **Hermes agent and Fallback (#5).** With `HERMES_ENABLED=true` the service starts a run on the Hermes gateway (`POST /v1/runs`, then polls `GET /v1/runs/{id}`), sending the `client-intake` skill text as `instructions` and the Redacted Transcript in `<transcript>` tags. `model_used` and `fallback_used` come from the run's `runtime.model` (Layer 1, Hermes' own `fallback_providers`). If there is no answer in 60 s, the output fails Intake Output validation, the run fails, or the gateway is unreachable, the service calls the secondary model directly through `LLMClient` (Layer 2, `fallback_used=true`, no retry on the primary). See ADR 0001.
 
-Files for the setup wizard: the skill is `app/agents/assets/client-intake/SKILL.md` (install to `~/.hermes/skills/client-intake/SKILL.md`) and the config is `app/agents/assets/hermes-config.yaml.template` (install to `~/.hermes/config.yaml`; secrets and `API_SERVER_ENABLED=true` go in `~/.hermes/.env`).
+Files for the setup wizard: the skill is `app/agents/assets/client-intake/SKILL.md` (install to `~/.hermes-intake/skills/client-intake/SKILL.md`) and the config is `app/agents/assets/hermes-config.yaml.template` (install to `~/.hermes-intake/config.yaml`; secrets, `API_SERVER_ENABLED=true` and `API_SERVER_PORT=8643` go in `~/.hermes-intake/.env`).
 
 ## Security & least privilege
 
@@ -72,9 +72,11 @@ Redaction, flagging and the API key sit between the Client and the model:
 [`scripts/setup_wizard.sh`](scripts/setup_wizard.sh) walks you through the steps only a human can do. It opens each URL, captures each value (secrets are read hidden and never printed) and updates `.env` in place without touching other keys.
 
 ```bash
-scripts/setup_wizard.sh local    # stages 1-3: Hermes install/config/skill/gateway, Groq + OpenRouter keys, OpenRouter privacy
+scripts/setup_wizard.sh local    # stages 1-3: dedicated Hermes home + gateway on 8643, Groq + OpenRouter keys, OpenRouter privacy
 scripts/setup_wizard.sh deploy   # stages 4-8: Slack app, Supabase, GCP VM + Caddy, Vercel dashboard, optional cloudflared tunnel
 ```
+
+**Separate Hermes home.** The Intake service has its own Hermes: home `~/.hermes-intake` (Hermes picks its home from the `HERMES_HOME` environment variable, `hermes_constants.get_hermes_home`), its own `.env`, config and skills, and its gateway on `127.0.0.1:8643` (`API_SERVER_PORT` in that `.env`) as the systemd user unit `hermes-intake-gateway`. A personal Hermes in `~/.hermes` (default port 8642, unit `hermes-gateway`) is never read, written or restarted by the wizard. Use `INTAKE_HERMES_HOME` / `INTAKE_HERMES_PORT` to move it. Logs: `journalctl --user -u hermes-intake-gateway`.
 
 The local stages are enough to start the e2e before any deploy. Re-running is safe: existing values and generated keys are reused.
 
@@ -82,13 +84,13 @@ The local stages are enough to start the e2e before any deploy. Re-running is sa
 
 Local: `cp .env.example .env`, fill it in, then `docker compose --profile dev up -d --build`. This starts Postgres (`db`, published on `127.0.0.1:5432` only) and the `api`, which runs `alembic upgrade head` and then uvicorn on `127.0.0.1:8000`. Check with `curl 127.0.0.1:8000/health`. Stop with `docker compose --profile dev down` (add `-v` to drop the database volume).
 
-The image is built with uv in two stages, runs as a non-root user (uid 10001) and has a healthcheck on `/health`. `.dockerignore` keeps `.env` out of the image. The `api` service uses host networking so it can reach the Hermes gateway at `127.0.0.1:8642` on the host.
+The image is built with uv in two stages, runs as a non-root user (uid 10001) and has a healthcheck on `/health`. `.dockerignore` keeps `.env` out of the image. The `api` service uses host networking so it can reach the Intake Hermes gateway at `127.0.0.1:8643` on the host.
 
 Server (one VM, Hermes on the host, API in Docker, Caddy in front):
 
 1. Install Docker, Caddy and Hermes (as a non-root service user; see the setup wizard). Copy the repo to `/opt/hermes_intake_agent` and create `.env` there.
 2. Set `DATABASE_URL` to the Supabase (EU region) connection string on port **5432** (direct or session). Do **not** use the 6543 transaction pooler. Use the `postgresql+asyncpg://` scheme. Do not use the `dev` profile on the server, so no local `db` starts.
-3. Hermes: `sudo hermes gateway install --system && sudo hermes gateway start --system`, or, for a system-wide unit, copy `deploy/hermes-gateway.service` and replace `__SERVICE_USER__` and `__HOME__` with the user who installed Hermes and their home directory. (The setup wizard installs a user service with `hermes gateway install` instead.) Never add an `ExecStopPost` kill.
+3. Hermes: run `scripts/setup_wizard.sh local` as the service user (it installs the user unit `hermes-intake-gateway`), or, for a system-wide unit, copy `deploy/hermes-intake-gateway.service` and replace `__SERVICE_USER__` and `__HOME__` with the user who installed Hermes and their home directory. Never add an `ExecStopPost` kill.
 4. API: `sudo cp deploy/intake-compose.service /etc/systemd/system/ && sudo systemctl enable --now intake-compose`. The container itself has `restart: unless-stopped`, and the unit re-runs `docker compose up -d` on boot.
 5. Caddy: put your free hostname in `deploy/Caddyfile`, copy it to `/etc/caddy/Caddyfile` and run `sudo systemctl reload caddy`. Caddy gets the HTTPS certificate automatically and proxies to `127.0.0.1:8000`.
 6. Dashboard: deploy `dashboard/` to Vercel and add its origin to `CORS_ORIGINS`.
@@ -108,7 +110,7 @@ uv run pytest -m e2e tests/e2e -s
 
 - The suite builds and starts compose itself, runs `down -v` at the end (`E2E_KEEP_STACK=1` keeps it), and needs ports 5432 and 8000 free.
 - It generates a throwaway `INTAKE_API_KEY` and `SLACK_SIGNING_SECRET` per run and passes them through the process environment, so `.env` is never edited.
-- Mode: with the Hermes gateway up on `127.0.0.1:8642` it runs through Hermes; otherwise it falls back to `HERMES_ENABLED=false` (direct Groq then OpenRouter). Force one with `HERMES_ENABLED=true|false`. The first line of output says which mode ran.
+- Mode: with the Intake Hermes gateway up at the configured `HERMES_BASE_URL` (default `127.0.0.1:8643`) it runs through Hermes; otherwise it falls back to `HERMES_ENABLED=false` (direct Groq then OpenRouter). Force one with `HERMES_ENABLED=true|false`. The first line of output says which mode ran.
 - It submits the three demo Transcripts `E2E_SUBMIT_GAP` seconds apart (default 30, Groq free tier allows 8K tokens per minute), so a run takes about 2 to 3 minutes.
 - It checks: valid Intake Output and primary model; Mike's Roofing has 3 Current Systems and 1 Issue (the assertion is strict, and the model may disagree: report the real counts rather than loosening it); PII placeholders with no raw values in API responses, database or API logs; `injection_flagged`; a signed Slack Approve gives `approved` and `approved_by`; and a forced Fallback (invalid Groq key, or in Hermes mode an unreachable gateway so Layer 2 answers) gives `fallback_used=true` with the OpenRouter model.
 
