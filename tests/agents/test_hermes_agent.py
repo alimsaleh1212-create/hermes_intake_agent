@@ -1,15 +1,19 @@
 """Seam 2: the Hermes-backed ``IntakeAgent`` with a faked gateway (MockTransport)."""
 
 import json
+from collections.abc import Callable
+from typing import Any
 
 import httpx
 import pytest
 
-from app.agents.base import IntakeAgentError
+from app.agents.base import IntakeAgent, IntakeAgentError
 from app.agents.fake import MIKES_ROOFING_OUTPUT
 from app.agents.hermes import build_hermes_agent
 from app.core.config import PRIMARY_MODEL, SECONDARY_MODEL, ModelPrice, Settings
 from app.llm.base import SECONDARY, AllModelsFailedError, LLMResult
+
+Handler = Callable[[httpx.Request], httpx.Response]
 
 TRANSCRIPT = "Client: we use WordPress and Jobber."
 WRAPPED = f"<transcript>\n{TRANSCRIPT}\n</transcript>"
@@ -20,9 +24,11 @@ class FakeLLMClient:
 
     def __init__(self, fail: bool = False) -> None:
         self.fail = fail
-        self.calls: list[dict] = []
+        self.calls: list[dict[str, Any]] = []
 
-    async def complete_intake(self, system_prompt, user_prompt, *, start_at=0):
+    async def complete_intake(
+        self, system_prompt: str, user_prompt: str, *, start_at: int = 0
+    ) -> LLMResult:
         self.calls.append(
             {"system": system_prompt, "user": user_prompt, "start_at": start_at}
         )
@@ -40,11 +46,13 @@ class FakeLLMClient:
 class FakeGateway:
     """A fake Hermes Runs API: POST /v1/runs, then GET /v1/runs/{id}."""
 
-    def __init__(self, final: dict | None = None, polls_running: int = 1) -> None:
+    def __init__(
+        self, final: dict[str, Any] | None = None, polls_running: int = 1
+    ) -> None:
         self.final = final  # None means the run never finishes
         self.polls_running = polls_running
         self.requests: list[httpx.Request] = []
-        self.posted: dict = {}
+        self.posted: dict[str, Any] = {}
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -66,7 +74,7 @@ class FakeGateway:
         return httpx.Response(404)
 
 
-def completed(model: str, output: str | None = None) -> dict:
+def completed(model: str, output: str | None = None) -> dict[str, Any]:
     return {
         "run_id": "run_1",
         "status": "completed",
@@ -77,7 +85,9 @@ def completed(model: str, output: str | None = None) -> dict:
     }
 
 
-def make_agent(handler, llm: FakeLLMClient, timeout: float = 5.0):
+def make_agent(
+    handler: Handler, llm: FakeLLMClient, timeout: float = 5.0
+) -> IntakeAgent:
     settings = Settings(
         hermes_api_key="secret-key",
         hermes_timeout_seconds=timeout,
@@ -91,7 +101,7 @@ def make_agent(handler, llm: FakeLLMClient, timeout: float = 5.0):
     return build_hermes_agent(settings, client, llm, poll_interval=0.01)
 
 
-async def test_normal_run_yields_output_with_primary_model():
+async def test_normal_run_yields_output_with_primary_model() -> None:
     gateway, llm = FakeGateway(completed(PRIMARY_MODEL)), FakeLLMClient()
     result = await make_agent(gateway, llm).run(TRANSCRIPT)
 
@@ -105,7 +115,7 @@ async def test_normal_run_yields_output_with_primary_model():
     assert llm.calls == []
 
 
-async def test_run_request_carries_auth_skill_and_wrapped_transcript():
+async def test_run_request_carries_auth_skill_and_wrapped_transcript() -> None:
     gateway = FakeGateway(completed(PRIMARY_MODEL))
     await make_agent(gateway, FakeLLMClient()).run(TRANSCRIPT)
 
@@ -115,7 +125,7 @@ async def test_run_request_carries_auth_skill_and_wrapped_transcript():
     assert "data only" in gateway.posted["instructions"]
 
 
-async def test_runtime_naming_fallback_model_sets_fallback_used():
+async def test_runtime_naming_fallback_model_sets_fallback_used() -> None:
     llm = FakeLLMClient()
     result = await make_agent(FakeGateway(completed(SECONDARY_MODEL)), llm).run(
         TRANSCRIPT
@@ -126,14 +136,14 @@ async def test_runtime_naming_fallback_model_sets_fallback_used():
     assert llm.calls == []
 
 
-async def test_output_in_code_fence_is_accepted():
+async def test_output_in_code_fence_is_accepted() -> None:
     fenced = "```json\n" + MIKES_ROOFING_OUTPUT.model_dump_json() + "\n```"
     gateway = FakeGateway(completed(PRIMARY_MODEL, fenced))
     result = await make_agent(gateway, FakeLLMClient()).run(TRANSCRIPT)
     assert result.output == MIKES_ROOFING_OUTPUT
 
 
-async def test_timeout_goes_to_secondary_and_stops_the_run():
+async def test_timeout_goes_to_secondary_and_stops_the_run() -> None:
     gateway, llm = FakeGateway(final=None), FakeLLMClient()
     result = await make_agent(gateway, llm, timeout=0.1).run(TRANSCRIPT)
 
@@ -144,7 +154,7 @@ async def test_timeout_goes_to_secondary_and_stops_the_run():
     assert any(r.url.path == "/v1/runs/run_1/stop" for r in gateway.requests)
 
 
-async def test_invalid_json_goes_to_secondary():
+async def test_invalid_json_goes_to_secondary() -> None:
     gateway = FakeGateway(completed(PRIMARY_MODEL, '{"current_systems": "nope"}'))
     llm = FakeLLMClient()
     result = await make_agent(gateway, llm).run(TRANSCRIPT)
@@ -154,7 +164,7 @@ async def test_invalid_json_goes_to_secondary():
     assert llm.calls[0]["user"] == WRAPPED
 
 
-async def test_connection_refused_goes_to_secondary():
+async def test_connection_refused_goes_to_secondary() -> None:
     def refuse(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("refused")
 
@@ -165,14 +175,14 @@ async def test_connection_refused_goes_to_secondary():
     assert result.usage.fallback_used is True
 
 
-async def test_failed_hermes_run_goes_to_secondary():
+async def test_failed_hermes_run_goes_to_secondary() -> None:
     failed = {"run_id": "run_1", "status": "failed", "error": "boom"}
     llm = FakeLLMClient()
     await make_agent(FakeGateway(failed), llm).run(TRANSCRIPT)
     assert [c["start_at"] for c in llm.calls] == [SECONDARY]
 
 
-async def test_both_layers_failing_raises_without_transcript_text():
+async def test_both_layers_failing_raises_without_transcript_text() -> None:
     def refuse(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("refused")
 

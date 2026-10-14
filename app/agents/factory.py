@@ -14,4 +14,4 @@ def build_agent(settings: Settings, http_client: httpx.AsyncClient) -> IntakeAge
     llm_client = build_llm_client(settings, http_client)
     if settings.hermes_enabled:
         return build_hermes_agent(settings, http_client, llm_client)
-    return build_direct_agent(settings, http_client, llm_client)
+    return build_direct_agent(settings, llm_client)

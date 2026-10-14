@@ -20,6 +20,8 @@ export default function IntakesTable() {
           <th>Client</th>
           <th>Status</th>
           <th>Model</th>
+          <th>Fallback</th>
+          <th>Injection Flag</th>
           <th>Cost</th>
           <th>Duration</th>
           <th>Created</th>
@@ -41,11 +43,19 @@ export default function IntakesTable() {
               <td>
                 <span className={`status status-${i.status}`}>{i.status}</span>
               </td>
+              <td>{i.model_used ?? "—"}</td>
               <td>
-                {i.model_used ?? "—"}
-                {i.fallback_used && <span className="badge badge-fallback">Fallback</span>}
-                {i.injection_flagged && (
+                {i.fallback_used ? (
+                  <span className="badge badge-fallback">Fallback</span>
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td>
+                {i.injection_flagged ? (
                   <span className="badge badge-flagged">Flagged</span>
+                ) : (
+                  "—"
                 )}
               </td>
               <td>{formatCost(i.cost_usd, i.est_cost_usd)}</td>

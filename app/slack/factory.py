@@ -5,20 +5,42 @@ from typing import Any
 from slack_sdk.web.async_client import AsyncWebClient
 
 from app.core.config import Settings
-from app.schemas.intake import IntakeDetail, IntakeStatus
+from app.schemas.intake import (
+    DECISION_BY_STATUS,
+    DECISION_LABEL,
+    Decision,
+    IntakeDetail,
+)
 from app.slack.base import SlackNotifier
 
-APPROVE_ACTION_ID = "intake_approve"
-REQUEST_CHANGES_ACTION_ID = "intake_request_changes"
+ACTION_ID_BY_DECISION = {
+    Decision.APPROVE: "intake_approve",
+    Decision.REQUEST_CHANGES: "intake_request_changes",
+}
+APPROVE_ACTION_ID = ACTION_ID_BY_DECISION[Decision.APPROVE]
+REQUEST_CHANGES_ACTION_ID = ACTION_ID_BY_DECISION[Decision.REQUEST_CHANGES]
 
 
 class NoopNotifier:
     """``SlackNotifier`` that posts nothing; used when Slack isn't configured."""
 
     async def post_intake_ready(self, intake: IntakeDetail) -> str | None:
+        """Post nothing.
+
+        Args:
+            intake: The Intake that is ready (ignored).
+
+        Returns:
+            Always ``None``: there is no Slack message.
+        """
         return None
 
     async def update_decision(self, intake: IntakeDetail) -> None:
+        """Edit nothing.
+
+        Args:
+            intake: The decided Intake (ignored).
+        """
         return None
 
 
@@ -30,6 +52,14 @@ class SlackWebNotifier:
         self._channel_id = channel_id
 
     async def post_intake_ready(self, intake: IntakeDetail) -> str | None:
+        """Post the "intake ready" message with Approve and Request changes buttons.
+
+        Args:
+            intake: The Intake now awaiting approval.
+
+        Returns:
+            The Slack message timestamp (``ts``), used later to edit the message.
+        """
         output = intake.output
         systems = len(output.current_systems) if output else 0
         issues = sum(v.verdict == "no" for v in output.feasibility) if output else 0
@@ -72,13 +102,14 @@ class SlackWebNotifier:
         return str(response["ts"])
 
     async def update_decision(self, intake: IntakeDetail) -> None:
+        """Replace the buttons with the decision and who made it.
+
+        Args:
+            intake: The decided Intake; nothing happens if it has no ``slack_ts``.
+        """
         if intake.slack_ts is None:
             return
-        label = (
-            "Approved"
-            if intake.status == IntakeStatus.APPROVED
-            else "Changes requested"
-        )
+        label = DECISION_LABEL[DECISION_BY_STATUS[intake.status]]
         decision = f"{label} by <@{intake.approved_by}>"
         await self._client.chat_update(
             channel=self._channel_id,
@@ -100,6 +131,13 @@ def build_slack_client(settings: Settings) -> AsyncWebClient | None:
     """Create the Slack Web API client, or ``None`` when no bot token is set."""
     token = settings.slack_bot_token.get_secret_value()
     return AsyncWebClient(token=token) if token else None
+
+
+async def close_slack_client(client: AsyncWebClient | None) -> None:
+    """Close the client's aiohttp session, if one was ever opened."""
+    session = client.session if client is not None else None
+    if session is not None and not session.closed:
+        await session.close()
 
 
 def build_notifier(

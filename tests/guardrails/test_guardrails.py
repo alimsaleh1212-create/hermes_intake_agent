@@ -4,13 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from app.core.config import Settings
 from app.guardrails.factory import build_injection_detector, build_redactor
 
 TRANSCRIPTS = Path(__file__).resolve().parents[2] / "transcripts"
-SETTINGS = Settings(_env_file=None)
-redactor = build_redactor(SETTINGS)
-detector = build_injection_detector(SETTINGS)
+redactor = build_redactor()
+detector = build_injection_detector()
 
 
 @pytest.mark.parametrize(

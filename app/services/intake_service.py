@@ -8,7 +8,13 @@ from uuid import UUID
 from app.agents.base import IntakeAgent, IntakeAgentError
 from app.db.repository import IntakeRepository
 from app.guardrails.base import InjectionDetector, Redactor
-from app.schemas.intake import Decision, IntakeCreate, IntakeDetail, IntakeStatus
+from app.schemas.intake import (
+    DECISION_STATUS,
+    Decision,
+    IntakeCreate,
+    IntakeDetail,
+    IntakeStatus,
+)
 from app.slack.base import SlackNotifier
 
 logger = logging.getLogger(__name__)
@@ -49,7 +55,7 @@ class IntakeService:
         self._detector = detector
         self._notifier = notifier
 
-    async def submit(self, request: IntakeCreate) -> Submission:
+    async def submit(self, submission: IntakeCreate) -> Submission:
         """Redact, flag, hash and store a new Intake in ``processing``.
 
         The raw Transcript goes no further than this method: only the Redacted
@@ -58,7 +64,7 @@ class IntakeService:
         Duplicate handling (#6): if an Intake with the same hash exists and has
         not failed, return it with ``created=False`` and store nothing.
         """
-        transcript_redacted = self._redactor.redact(request.transcript)
+        transcript_redacted = self._redactor.redact(submission.transcript)
         transcript_hash = hash_transcript(transcript_redacted)
         existing = await self._repository.find_latest_by_hash(transcript_hash)
         if existing is not None and existing.status != IntakeStatus.FAILED:
@@ -69,7 +75,7 @@ class IntakeService:
             )
             return Submission(intake=existing, created=False)
         intake = await self._repository.create(
-            client_name=request.client_name,
+            client_name=submission.client_name,
             transcript_redacted=transcript_redacted,
             transcript_hash=transcript_hash,
             injection_flagged=self._detector.is_flagged(transcript_redacted),
@@ -145,12 +151,9 @@ class IntakeService:
         Returns:
             The updated Intake, or ``None`` if nothing changed.
         """
-        status = (
-            IntakeStatus.APPROVED
-            if decision == Decision.APPROVE
-            else IntakeStatus.CHANGES_REQUESTED
+        decided = await self._repository.apply_decision(
+            intake_id, DECISION_STATUS[decision], decided_by
         )
-        decided = await self._repository.apply_decision(intake_id, status, decided_by)
         if decided is None:
             return None
         try:

@@ -5,7 +5,7 @@ table { width: 100%; border-collapse: collapse; background: #fff; }
 th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e2e5ea; }
 .row-fallback { background: #fff4d6; }
 .row-flagged { background: #fde1e1; }
-.badge { margin-left: 0.5rem; padding: 0 0.4rem; border-radius: 4px; font-size: 0.75rem; }
+.badge { padding: 0 0.4rem; border-radius: 4px; font-size: 0.75rem; }
 .badge-fallback { background: #f0b429; }
 .badge-flagged { background: #d64545; color: #fff; }
 .status { font-weight: 600; }

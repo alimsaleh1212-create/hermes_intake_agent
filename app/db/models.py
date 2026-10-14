@@ -18,13 +18,9 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-INTAKE_STATUSES = (
-    "processing",
-    "awaiting_approval",
-    "approved",
-    "changes_requested",
-    "failed",
-)
+from app.schemas.intake import IntakeStatus
+
+INTAKE_STATUSES = tuple(status.value for status in IntakeStatus)
 
 
 class Base(DeclarativeBase):
