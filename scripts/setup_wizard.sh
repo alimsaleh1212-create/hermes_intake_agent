@@ -153,7 +153,8 @@ finish() {
 # ──────────────────────────────────────────────────────────────────────────
 
 # Usage: scripts/setup_wizard.sh [local|deploy|all]   (default: asks)
-#   local  = stages 1-3: Hermes, model keys, OpenRouter privacy (enough to start the e2e)
+#   local  = stages 1-3: dedicated Hermes home (~/.hermes-intake, gateway on 127.0.0.1:8643),
+#            model keys, OpenRouter privacy (enough to start the e2e)
 #   deploy = stages 4-8: Slack, Supabase, GCP VM, Vercel, optional tunnel
 # Values go into ./.env, updated in place: other keys are never touched, and key
 # names match case-insensitively so existing lowercase names are reused. Secrets
@@ -162,8 +163,16 @@ finish() {
 # Assumed repo paths (written by ticket #5): app/agents/assets/hermes-config.yaml.template and
 # app/agents/assets/client-intake/SKILL.md.
 
-HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+# The Intake service runs its OWN Hermes home and gateway, separate from any personal
+# Hermes in ~/.hermes (HERMES_HOME selects the home: hermes_constants.get_hermes_home).
+# This script never writes to, restarts or stops ~/.hermes or its hermes-gateway unit.
+# INTAKE_HERMES_HOME (not HERMES_HOME) so a shell export for another Hermes is ignored.
+INTAKE_HERMES_HOME="${INTAKE_HERMES_HOME:-$HOME/.hermes-intake}"
+HERMES_HOME="$INTAKE_HERMES_HOME"
 HERMES_ENV="$HERMES_HOME/.env"
+HERMES_PORT="${INTAKE_HERMES_PORT:-8643}"
+HERMES_UNIT="hermes-intake-gateway"
+HERMES_UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 HERMES_TEMPLATE="app/agents/assets/hermes-config.yaml.template"
 HERMES_SKILL_SRC="app/agents/assets/client-intake/SKILL.md"
 HERMES_INSTALLER="https://hermes-agent.nousresearch.com/install.sh"
@@ -261,12 +270,43 @@ provide_key() {
   env_set "$HERMES_ENV" "$upper" "$val"
 }
 
+# install_gateway_unit: write the user unit for the Intake gateway (own HERMES_HOME,
+# own port from that home's .env) and (re)start it. Only touches $HERMES_UNIT.
+install_gateway_unit() {
+  local bin; bin=$(command -v hermes) || return 1
+  say "Starting the Intake Hermes gateway ($HERMES_UNIT, user service)."
+  mkdir -p "$HERMES_UNIT_DIR"
+  cat > "$HERMES_UNIT_DIR/$HERMES_UNIT.service" <<UNIT
+[Unit]
+Description=Hermes Agent gateway for Intake (API server on 127.0.0.1:$HERMES_PORT)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=$HOME
+Environment=PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HERMES_HOME=$HERMES_HOME
+ExecStart=$bin gateway run
+Restart=always
+RestartSec=5
+KillMode=mixed
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=default.target
+UNIT
+  systemctl --user daemon-reload || return 1
+  systemctl --user enable "$HERMES_UNIT.service" >/dev/null 2>&1 || true
+  systemctl --user restart "$HERMES_UNIT.service"
+}
+
 add_hermes_path() { export PATH="$HOME/.local/bin:$PATH"; }
 
 # ── Stages ────────────────────────────────────────────────────────────────
 
 stage_hermes() {
-  stage "Hermes: install, config, skill, API key"
+  stage "Hermes: dedicated home, config, skill, API key"
   add_hermes_path
   if command -v hermes >/dev/null 2>&1; then
     say "Hermes is already installed ($(command -v hermes))."
@@ -281,23 +321,22 @@ stage_hermes() {
     fi
   fi
   if command -v hermes >/dev/null 2>&1; then
-    if hermes doctor >/dev/null 2>&1; then say "hermes doctor: ok"; else warn "hermes doctor reported problems; run it by hand"; fi
+    if HERMES_HOME="$HERMES_HOME" hermes doctor >/dev/null 2>&1; then say "hermes doctor: ok"; else warn "hermes doctor reported problems; run: HERMES_HOME=$HERMES_HOME hermes doctor"; fi
   fi
 
+  if [[ "$(realpath -m "$HERMES_HOME")" == "$(realpath -m "$HOME/.hermes")" ]]; then
+    warn "$HERMES_HOME is your personal Hermes home; refusing to touch it."
+    return 1
+  fi
   mkdir -p "$HERMES_HOME/skills/client-intake"
+  say "Dedicated Hermes home: $HERMES_HOME (your personal ~/.hermes is left alone)."
   if [[ -f "$HERMES_TEMPLATE" ]]; then
     if [[ -f "$HERMES_HOME/config.yaml" ]] && ! cmp -s "$HERMES_TEMPLATE" "$HERMES_HOME/config.yaml"; then
-      if confirm "$HERMES_HOME/config.yaml differs from the template. Back it up and replace it?"; then
-        cp "$HERMES_HOME/config.yaml" "$HERMES_HOME/config.yaml.bak.$(date +%s)"
-        cp "$HERMES_TEMPLATE" "$HERMES_HOME/config.yaml"
-        say "config.yaml replaced (old one backed up)."
-      else
-        say "Kept your existing config.yaml."
-      fi
-    else
-      cp "$HERMES_TEMPLATE" "$HERMES_HOME/config.yaml"
-      say "config.yaml installed from $HERMES_TEMPLATE."
+      cp "$HERMES_HOME/config.yaml" "$HERMES_HOME/config.yaml.bak.$(date +%s)"
+      say "Old config.yaml backed up."
     fi
+    cp "$HERMES_TEMPLATE" "$HERMES_HOME/config.yaml"
+    say "config.yaml installed from $HERMES_TEMPLATE."
   else
     warn "$HERMES_TEMPLATE not found (ticket #5); merge that ticket first."
     SKIPPED+=("Install Hermes config template ($HERMES_TEMPLATE)")
@@ -314,10 +353,12 @@ stage_hermes() {
   local hk ik
   hk=$(env_read "$HERMES_ENV" API_SERVER_KEY || env_read "$ENV_FILE" HERMES_API_KEY || gen_key)
   env_set "$HERMES_ENV" API_SERVER_ENABLED true
+  env_set "$HERMES_ENV" API_SERVER_HOST 127.0.0.1
+  env_set "$HERMES_ENV" API_SERVER_PORT "$HERMES_PORT"
   env_set "$HERMES_ENV" API_SERVER_KEY "$hk"
   env_set "$ENV_FILE" HERMES_API_KEY "$hk"
   env_set "$ENV_FILE" HERMES_ENABLED true
-  env_set "$ENV_FILE" HERMES_BASE_URL "http://127.0.0.1:8642"
+  env_set "$ENV_FILE" HERMES_BASE_URL "http://127.0.0.1:$HERMES_PORT"
   ik=$(env_read "$ENV_FILE" INTAKE_API_KEY || gen_key)
   env_set "$ENV_FILE" INTAKE_API_KEY "$ik"
   note "Keys were generated locally and are not displayed; read them from $ENV_FILE if needed."
@@ -334,11 +375,9 @@ stage_model_keys() {
 
   local i code="000" base key
   if command -v hermes >/dev/null 2>&1; then
-    say "Starting the Hermes gateway (user service)."
-    hermes gateway install >/dev/null 2>&1 || true
-    hermes gateway restart >/dev/null 2>&1 || hermes gateway start >/dev/null 2>&1 || warn "could not start the gateway; run: hermes gateway start"
+    install_gateway_unit || warn "could not start $HERMES_UNIT; see: journalctl --user -u $HERMES_UNIT"
     note "On a headless VM also run: sudo loginctl enable-linger \$USER"
-    base=$(env_read "$ENV_FILE" HERMES_BASE_URL || echo http://127.0.0.1:8642)
+    base=$(env_read "$ENV_FILE" HERMES_BASE_URL || echo "http://127.0.0.1:$HERMES_PORT")
     key=$(env_read "$HERMES_ENV" API_SERVER_KEY || true)
     for i in $(seq 1 20); do
       code=$(http_status GET "${base%/}/health")
@@ -351,7 +390,7 @@ stage_model_keys() {
       if [[ "$code" == "200" ]] && grep -q 'client-intake' "$HTTP_BODY_FILE"; then
         say "✓ client-intake skill is visible to the gateway."
       else
-        warn "skill check failed (HTTP $code); see: journalctl --user -u hermes-gateway"
+        warn "skill check failed (HTTP $code); see: journalctl --user -u $HERMES_UNIT"
       fi
       code=$(http_status GET "${base%/}/v1/toolsets" "$key")
       if [[ "$code" != "200" ]]; then warn "toolset check returned HTTP $code"

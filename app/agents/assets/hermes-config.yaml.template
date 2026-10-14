@@ -1,7 +1,8 @@
-# Hermes config template for the Intake service. The setup wizard copies this to
-# ~/.hermes/config.yaml. Secrets (GROQ_API_KEY, OPENROUTER_API_KEY, API_SERVER_KEY)
-# and API_SERVER_ENABLED=true go in ~/.hermes/.env, never here.
-# Install the skill at ~/.hermes/skills/client-intake/SKILL.md.
+# Hermes config template for the Intake service's own Hermes home (HERMES_HOME=~/.hermes-intake,
+# kept apart from any personal ~/.hermes). The setup wizard copies this to
+# ~/.hermes-intake/config.yaml. Secrets (GROQ_API_KEY, OPENROUTER_API_KEY, API_SERVER_KEY)
+# and API_SERVER_ENABLED=true go in ~/.hermes-intake/.env, never here.
+# Install the skill at ~/.hermes-intake/skills/client-intake/SKILL.md.
 
 providers:
   groq:                          # custom OpenAI-compatible provider
@@ -14,7 +15,7 @@ model:
 
 # Layer 1 Fallback (ADR 0001): Hermes switches model within a run.
 fallback_providers:
-  - provider: openrouter         # needs OPENROUTER_API_KEY in ~/.hermes/.env
+  - provider: openrouter         # needs OPENROUTER_API_KEY in ~/.hermes-intake/.env
     model: nvidia/nemotron-3-super-120b-a12b:free
 
 # Least privilege: the agent has no tools, so a successful prompt injection

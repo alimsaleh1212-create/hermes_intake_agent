@@ -1,7 +1,7 @@
 # Local:  docker compose --profile dev up -d --build   (db + api)
 # Server: docker compose up -d --build                  (api only; DATABASE_URL -> Supabase)
 # The api uses host networking so it can reach the Hermes gateway on the host's
-# 127.0.0.1:8642 and the dev db on 127.0.0.1:5432.
+# 127.0.0.1:8643 and the dev db on 127.0.0.1:5432.
 services:
   api:
     build: .
