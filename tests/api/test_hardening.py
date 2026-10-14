@@ -1,4 +1,4 @@
-"""Submission hardening through the HTTP seam: auth, duplicates, failures, CORS, logs."""
+"""Submission hardening via the HTTP seam: auth, duplicates, failures, CORS, logs."""
 
 import logging
 
