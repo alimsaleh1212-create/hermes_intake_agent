@@ -27,3 +27,8 @@ Uses the five default triage labels (`needs-triage`, `needs-info`, `ready-for-ag
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Subagent models
+
+- Implementation and merge subagents use Sonnet 5.5 (`model: "sonnet"`).
+- Code review uses Opus 5.5.
