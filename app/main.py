@@ -6,6 +6,7 @@ once and closes them at shutdown. Run with
 environment only when the server starts, never on import).
 """
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -26,6 +27,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings: Configuration; read from the environment and ``.env`` if omitted.
     """
     settings = settings or Settings()
+    logging.basicConfig(
+        level=settings.log_level.upper(),
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
