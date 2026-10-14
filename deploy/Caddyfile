@@ -1,0 +1,6 @@
+# Replace the hostname with a free one (e.g. intake.example.duckdns.org) pointing
+# at this VM; Caddy gets and renews the HTTPS certificate automatically.
+intake.example.com {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8000
+}

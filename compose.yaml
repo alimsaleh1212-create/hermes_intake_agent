@@ -1,0 +1,37 @@
+# Local:  docker compose --profile dev up -d --build   (db + api)
+# Server: docker compose up -d --build                  (api only; DATABASE_URL -> Supabase)
+# The api uses host networking so it can reach the Hermes gateway on the host's
+# 127.0.0.1:8642 and the dev db on 127.0.0.1:5432.
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    network_mode: host
+    # Start order only matters locally; with Supabase there is no db service.
+    # Alembic retries are not needed: depends_on waits for the dev db healthcheck.
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+
+  db:
+    image: postgres:16-alpine
+    profiles: ["dev"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: intake
+      POSTGRES_PASSWORD: intake
+      POSTGRES_DB: intake
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U intake -d intake"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+.git
+.claude
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+dashboard
+node_modules
+tests
+docs
+deploy
