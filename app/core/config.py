@@ -73,7 +73,6 @@ class Settings(BaseSettings):
     hermes_enabled: bool = True
     hermes_base_url: str = "http://127.0.0.1:8642"
     hermes_api_key: SecretStr = SecretStr("")
-    hermes_skill: str = "client-intake"
     hermes_timeout_seconds: float = 60.0
 
     # --- Slack Approval ---

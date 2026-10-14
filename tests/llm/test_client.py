@@ -8,7 +8,7 @@ import pytest
 
 from app.agents.fake import MIKES_ROOFING_OUTPUT
 from app.core.config import Settings
-from app.llm.base import PRIMARY, SECONDARY, AllModelsFailedError, LLMClient
+from app.llm.base import PRIMARY, SECONDARY, AllModelsFailedError, LLMClient, LLMResult
 from app.llm.factory import build_llm_client
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -19,7 +19,9 @@ OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 Handler = Callable[[httpx.Request], httpx.Response]
 
 
-def ok(content: str | None = None, prompt: int = 100, completion: int = 50):
+def ok(
+    content: str | None = None, prompt: int = 100, completion: int = 50
+) -> httpx.Response:
     body = {
         "choices": [
             {
@@ -52,7 +54,7 @@ def make_client(
     return build_llm_client(settings, http)
 
 
-async def complete(client: LLMClient, start_at: int = PRIMARY):
+async def complete(client: LLMClient, start_at: int = PRIMARY) -> LLMResult:
     return await client.complete_intake(
         "system", "<transcript>t</transcript>", start_at=start_at
     )

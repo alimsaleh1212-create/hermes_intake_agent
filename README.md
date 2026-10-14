@@ -58,7 +58,14 @@ Files for the setup wizard: the skill is `app/agents/assets/client-intake/SKILL.
 
 **Hermes has no tools.** The config template sets `platform_toolsets.api_server: []` and `agent.disabled_toolsets`, so even a successful prompt injection cannot act: the model can only return text, which is schema-validated and then approved by a person in Slack. The template also sets `api_max_retries: 0` and `auto_recovery_cycles: 0` so Hermes cannot exceed the 60 s budget.
 
-<!-- TODO(#3, #6): redaction before model/DB/logs, Injection Flag, transcript-as-data prompt, no Hermes toolsets, schema validation, API key, CORS, EU region, Slack signature checks. -->
+Redaction, flagging and the API key sit between the Client and the model:
+
+- **Redaction first.** The raw Transcript never leaves the submit call. Email addresses, phone numbers and street addresses are replaced with placeholders such as `[EMAIL_1]` before anything else happens, so only the Redacted Transcript reaches the model, the database and the logs.
+- **Injection Flag.** A keyword check on the Redacted Transcript sets `injection_flagged`. The Intake is still processed, but the flag shows in the dashboard and in the Slack message so a reviewer looks closer. The Transcript is also wrapped in `<transcript>` tags and the prompt says it is data, never instructions.
+- **API key.** `POST /intakes` requires the `X-API-Key` header to match `INTAKE_API_KEY`; if the key is unset on the server every submission is rejected. The read endpoints are open (they hold only Redacted data).
+- **CORS.** Only the origins in `CORS_ORIGINS` (the dashboard) may call the API from a browser, with `GET`, `POST` and the `Content-Type` and `X-API-Key` headers.
+- **No Transcript logging.** Logs carry Intake IDs, status, cost and duration, and only exception type names, never Transcript text or model output.
+- **Least privilege.** Hermes has no tools (above), the output must pass the Intake Output schema, a person approves in Slack, and Slack callbacks are accepted only with a valid signature and a fresh timestamp. The container runs as a non-root user and the database is in an EU region.
 
 ## Setup wizard
 
@@ -81,7 +88,7 @@ Server (one VM, Hermes on the host, API in Docker, Caddy in front):
 
 1. Install Docker, Caddy and Hermes (as a non-root service user; see the setup wizard). Copy the repo to `/opt/hermes_intake_agent` and create `.env` there.
 2. Set `DATABASE_URL` to the Supabase (EU region) connection string on port **5432** (direct or session). Do **not** use the 6543 transaction pooler. Use the `postgresql+asyncpg://` scheme. Do not use the `dev` profile on the server, so no local `db` starts.
-3. Hermes: `sudo hermes gateway install --system && sudo hermes gateway start --system`, or copy `deploy/hermes-gateway.service` (adjust `User` and paths). Never add an `ExecStopPost` kill.
+3. Hermes: `sudo hermes gateway install --system && sudo hermes gateway start --system`, or, for a system-wide unit, copy `deploy/hermes-gateway.service` and replace `__SERVICE_USER__` and `__HOME__` with the user who installed Hermes and their home directory. (The setup wizard installs a user service with `hermes gateway install` instead.) Never add an `ExecStopPost` kill.
 4. API: `sudo cp deploy/intake-compose.service /etc/systemd/system/ && sudo systemctl enable --now intake-compose`. The container itself has `restart: unless-stopped`, and the unit re-runs `docker compose up -d` on boot.
 5. Caddy: put your free hostname in `deploy/Caddyfile`, copy it to `/etc/caddy/Caddyfile` and run `sudo systemctl reload caddy`. Caddy gets the HTTPS certificate automatically and proxies to `127.0.0.1:8000`.
 6. Dashboard: deploy `dashboard/` to Vercel and add its origin to `CORS_ORIGINS`.

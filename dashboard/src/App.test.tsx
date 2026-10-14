@@ -79,6 +79,26 @@ describe("Intakes table", () => {
     expect(within(sus).getByText("Flagged")).toBeInTheDocument();
   });
 
+  it("shows Fallback and the Injection Flag in their own columns", async () => {
+    mockApi({
+      "/intakes": () => ({
+        body: [
+          makeSummary({
+            client_name: "Both",
+            fallback_used: true,
+            injection_flagged: true,
+          }),
+        ],
+      }),
+    });
+    render(<App />);
+    const row = (await screen.findByText("Both")).closest("tr")!;
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    const cells = within(row).getAllByRole("cell");
+    expect(cells[headers.indexOf("Fallback")]).toHaveTextContent("Fallback");
+    expect(cells[headers.indexOf("Injection Flag")]).toHaveTextContent("Flagged");
+  });
+
   it("refreshes every 5 seconds and picks up a status change", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     let status: "awaiting_approval" | "approved" = "awaiting_approval";

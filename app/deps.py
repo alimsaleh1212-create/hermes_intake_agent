@@ -14,9 +14,11 @@ from slack_sdk.web.async_client import AsyncWebClient
 from app.agents.base import IntakeAgent
 from app.agents.factory import build_agent
 from app.core.config import Settings
+from app.db.factory import build_repository
 from app.db.repository import IntakeRepository
 from app.guardrails.base import InjectionDetector, Redactor
 from app.guardrails.factory import build_injection_detector, build_redactor
+from app.services.factory import build_intake_service
 from app.services.intake_service import IntakeService
 from app.slack.base import SlackNotifier
 from app.slack.factory import build_notifier
@@ -39,7 +41,7 @@ def get_slack_client(request: Request) -> AsyncWebClient | None:
 
 def get_repository(request: Request) -> IntakeRepository:
     """The Intake repository over the lifespan's session factory."""
-    return IntakeRepository(request.app.state.session_factory)
+    return build_repository(request.app.state.session_factory)
 
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -53,14 +55,14 @@ def get_agent(
     return build_agent(settings, http_client)
 
 
-def get_redactor(settings: SettingsDep) -> Redactor:
+def get_redactor() -> Redactor:
     """The configured ``Redactor``."""
-    return build_redactor(settings)
+    return build_redactor()
 
 
-def get_injection_detector(settings: SettingsDep) -> InjectionDetector:
+def get_injection_detector() -> InjectionDetector:
     """The configured ``InjectionDetector``."""
-    return build_injection_detector(settings)
+    return build_injection_detector()
 
 
 def get_notifier(
@@ -79,7 +81,7 @@ def get_intake_service(
     notifier: Annotated[SlackNotifier, Depends(get_notifier)],
 ) -> IntakeService:
     """An ``IntakeService`` wired with the configured collaborators."""
-    return IntakeService(repository, agent, redactor, detector, notifier)
+    return build_intake_service(repository, agent, redactor, detector, notifier)
 
 
 IntakeServiceDep = Annotated[IntakeService, Depends(get_intake_service)]

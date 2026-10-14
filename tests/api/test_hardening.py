@@ -1,6 +1,7 @@
 """Submission hardening via the HTTP seam: auth, duplicates, failures, CORS, logs."""
 
 import logging
+from uuid import UUID
 
 import httpx
 import pytest
@@ -9,7 +10,12 @@ from pydantic import SecretStr
 
 from app.agents.base import IntakeAgentError
 from app.agents.fake import FakeAgent
+from app.db.factory import build_repository
+from app.guardrails.factory import build_injection_detector, build_redactor
+from app.schemas.intake import Decision
+from app.services.factory import build_intake_service
 from tests.api.test_intakes import MIKES_ROOFING, submit
+from tests.fakes import RecordingNotifier
 
 PAYLOAD = {"client_name": "Mike's Roofing", "transcript": MIKES_ROOFING}
 
@@ -190,3 +196,54 @@ async def test_completion_is_logged_with_the_intake_id_and_status(
 
     messages = [r.getMessage() for r in caplog.records if r.name.startswith("app.")]
     assert any(intake_id in m and "awaiting_approval" in m for m in messages)
+
+
+async def _late_process(
+    app: FastAPI,
+    api_client: httpx.AsyncClient,
+    fake_agent: FakeAgent,
+    notifier: RecordingNotifier,
+    error: IntakeAgentError | None,
+) -> dict[str, object]:
+    """Approve an Intake, then run ``process`` on it again; return the Intake."""
+    intake_id = (await submit(api_client)).json()["id"]
+    service = build_intake_service(
+        build_repository(app.state.session_factory),
+        fake_agent,
+        build_redactor(),
+        build_injection_detector(),
+        notifier,
+    )
+    await service.record_decision(UUID(intake_id), Decision.APPROVE, "U123")
+    fake_agent.error = error
+
+    await service.process(UUID(intake_id))
+
+    return (await api_client.get(f"/intakes/{intake_id}")).json()
+
+
+async def test_late_failing_process_never_overwrites_a_decided_intake(
+    app: FastAPI,
+    api_client: httpx.AsyncClient,
+    fake_agent: FakeAgent,
+    notifier: RecordingNotifier,
+) -> None:
+    body = await _late_process(
+        app, api_client, fake_agent, notifier, IntakeAgentError("late failure")
+    )
+
+    assert body["status"] == "approved"
+    assert body["error"] is None
+
+
+async def test_late_completing_process_never_overwrites_a_decided_intake(
+    app: FastAPI,
+    api_client: httpx.AsyncClient,
+    fake_agent: FakeAgent,
+    notifier: RecordingNotifier,
+) -> None:
+    body = await _late_process(app, api_client, fake_agent, notifier, None)
+
+    assert body["status"] == "approved"
+    assert body["approved_by"] == "U123"
+    assert len(notifier.posted) == 1
