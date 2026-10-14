@@ -13,3 +13,7 @@ __pycache__/
 node_modules/
 dist/
 .claude/worktrees/
+
+# dashboard
+dashboard/node_modules/
+dashboard/dist/
