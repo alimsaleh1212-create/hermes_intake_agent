@@ -62,7 +62,14 @@ Files for the setup wizard: the skill is `app/agents/assets/client-intake/SKILL.
 
 ## Setup wizard
 
-<!-- TODO(#10): link and summary of the setup wizard for human-only steps. -->
+[`scripts/setup_wizard.sh`](scripts/setup_wizard.sh) walks you through the steps only a human can do. It opens each URL, captures each value (secrets are read hidden and never printed) and updates `.env` in place without touching other keys.
+
+```bash
+scripts/setup_wizard.sh local    # stages 1-3: Hermes install/config/skill/gateway, Groq + OpenRouter keys, OpenRouter privacy
+scripts/setup_wizard.sh deploy   # stages 4-8: Slack app, Supabase, GCP VM + Caddy, Vercel dashboard, optional cloudflared tunnel
+```
+
+The local stages are enough to start the e2e before any deploy. Re-running is safe: existing values and generated keys are reused.
 
 ## Deploy
 
