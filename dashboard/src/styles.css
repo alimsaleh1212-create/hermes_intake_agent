@@ -1,0 +1,18 @@
+body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1c2230; }
+main { max-width: 1100px; margin: 0 auto; padding: 1rem; }
+a { color: #2a5bd7; }
+table { width: 100%; border-collapse: collapse; background: #fff; }
+th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e2e5ea; }
+.row-fallback { background: #fff4d6; }
+.row-flagged { background: #fde1e1; }
+.badge { margin-left: 0.5rem; padding: 0 0.4rem; border-radius: 4px; font-size: 0.75rem; }
+.badge-fallback { background: #f0b429; }
+.badge-flagged { background: #d64545; color: #fff; }
+.status { font-weight: 600; }
+.status-approved { color: #1a7f37; }
+.status-failed, .status-changes_requested { color: #b42318; }
+.verdict { padding: 0 0.5rem; border-radius: 4px; font-weight: 600; }
+.verdict-yes { background: #d1f0da; color: #14532d; }
+.verdict-partial { background: #fff0c2; color: #7a4b00; }
+.verdict-no { background: #fbd5d5; color: #7f1d1d; }
+pre { white-space: pre-wrap; background: #fff; padding: 1rem; border: 1px solid #e2e5ea; }
