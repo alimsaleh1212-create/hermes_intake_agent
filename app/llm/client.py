@@ -49,6 +49,7 @@ class _ProviderFailure(Exception):
     """
 
     def __init__(self, message: str, reason: str | None = None) -> None:
+        """Keep the log message and the short ``reason`` code."""
         super().__init__(message)
         self.reason = reason or message
 
@@ -62,6 +63,7 @@ class OpenAICompatLLMClient:
         http_client: httpx.AsyncClient,
         timeout_seconds: float = 60.0,
     ) -> None:
+        """Store the ordered providers, HTTP client and per-call timeout."""
         self._providers = providers
         self._http = http_client
         self._timeout = timeout_seconds

@@ -8,6 +8,11 @@ from app.agents.hermes import build_hermes_agent
 from app.core.config import Settings
 from app.llm.factory import build_llm_client
 
+__all__ = [
+    "IntakeAgent",
+    "build_agent",
+]
+
 
 def build_agent(settings: Settings, http_client: httpx.AsyncClient) -> IntakeAgent:
     """Return the Hermes-backed agent, or the direct-LLM agent when Hermes is off."""

@@ -40,6 +40,7 @@ class _HermesRunError(Exception):
     """
 
     def __init__(self, message: str, reason: str | None = None) -> None:
+        """Keep the log message and the short ``reason`` code."""
         super().__init__(message)
         self.reason = reason or message
 
@@ -93,6 +94,7 @@ class HermesAgent:
         llm_client: LLMClient,
         poll_interval: float = 1.0,
     ) -> None:
+        """Store the gateway settings, HTTP client and LLM client."""
         self._settings = settings
         self._http = http_client
         self._llm = llm_client

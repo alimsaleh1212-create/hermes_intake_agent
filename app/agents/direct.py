@@ -38,6 +38,7 @@ class DirectAgent:
     """Runs the Intake through ``LLMClient``, primary then secondary."""
 
     def __init__(self, llm_client: LLMClient, prices: dict[str, ModelPrice]) -> None:
+        """Store the LLM client and the model prices."""
         self._llm = llm_client
         self._prices = prices
 

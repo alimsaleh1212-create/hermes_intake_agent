@@ -47,6 +47,7 @@ class IntakeRepository:
     """Persistence for Intakes."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        """Store the session factory; each method opens its own session."""
         self._session_factory = session_factory
 
     async def create(

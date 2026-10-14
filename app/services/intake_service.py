@@ -49,6 +49,7 @@ class IntakeService:
         detector: InjectionDetector,
         notifier: SlackNotifier,
     ) -> None:
+        """Store the collaborators the use cases need."""
         self._repository = repository
         self._agent = agent
         self._redactor = redactor
