@@ -79,6 +79,22 @@ class Decision(StrEnum):
     REQUEST_CHANGES = "request_changes"
 
 
+DECISION_STATUS = {
+    Decision.APPROVE: IntakeStatus.APPROVED,
+    Decision.REQUEST_CHANGES: IntakeStatus.CHANGES_REQUESTED,
+}
+"""The Intake status each Slack ``Decision`` leads to."""
+
+DECISION_LABEL = {
+    Decision.APPROVE: "Approved",
+    Decision.REQUEST_CHANGES: "Changes requested",
+}
+"""Human wording of each ``Decision``, used in the Slack message."""
+
+DECISION_BY_STATUS = {status: decision for decision, status in DECISION_STATUS.items()}
+"""Inverse of ``DECISION_STATUS`` for decided Intakes."""
+
+
 class IntakeCreate(BaseModel):
     """Body of ``POST /intakes``."""
 

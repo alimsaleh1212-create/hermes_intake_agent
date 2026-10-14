@@ -5,11 +5,20 @@ from typing import Any
 from slack_sdk.web.async_client import AsyncWebClient
 
 from app.core.config import Settings
-from app.schemas.intake import IntakeDetail, IntakeStatus
+from app.schemas.intake import (
+    DECISION_BY_STATUS,
+    DECISION_LABEL,
+    Decision,
+    IntakeDetail,
+)
 from app.slack.base import SlackNotifier
 
-APPROVE_ACTION_ID = "intake_approve"
-REQUEST_CHANGES_ACTION_ID = "intake_request_changes"
+ACTION_ID_BY_DECISION = {
+    Decision.APPROVE: "intake_approve",
+    Decision.REQUEST_CHANGES: "intake_request_changes",
+}
+APPROVE_ACTION_ID = ACTION_ID_BY_DECISION[Decision.APPROVE]
+REQUEST_CHANGES_ACTION_ID = ACTION_ID_BY_DECISION[Decision.REQUEST_CHANGES]
 
 
 class NoopNotifier:
@@ -100,11 +109,7 @@ class SlackWebNotifier:
         """
         if intake.slack_ts is None:
             return
-        label = (
-            "Approved"
-            if intake.status == IntakeStatus.APPROVED
-            else "Changes requested"
-        )
+        label = DECISION_LABEL[DECISION_BY_STATUS[intake.status]]
         decision = f"{label} by <@{intake.approved_by}>"
         await self._client.chat_update(
             channel=self._channel_id,

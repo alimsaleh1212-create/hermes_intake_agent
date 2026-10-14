@@ -17,15 +17,14 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 
 from app.deps import IntakeServiceDep, SettingsDep
 from app.schemas.intake import Decision
-from app.slack.factory import APPROVE_ACTION_ID, REQUEST_CHANGES_ACTION_ID
+from app.slack.factory import ACTION_ID_BY_DECISION
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/slack", tags=["slack"])
 
 DECISIONS = {
-    APPROVE_ACTION_ID: Decision.APPROVE,
-    REQUEST_CHANGES_ACTION_ID: Decision.REQUEST_CHANGES,
+    action_id: decision for decision, action_id in ACTION_ID_BY_DECISION.items()
 }
 
 
