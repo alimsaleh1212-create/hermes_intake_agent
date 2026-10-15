@@ -401,6 +401,10 @@ button {
   margin-top: 2px;
 }
 
+.change-reason {
+  white-space: pre-line;
+}
+
 .callout-error {
   display: block;
   background: var(--red-soft);

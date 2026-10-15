@@ -33,6 +33,7 @@ def _to_detail(row: IntakeRow) -> IntakeDetail:
         duration_ms=row.duration_ms,
         approved_by=row.approved_by,
         decided_at=row.decided_at,
+        change_reason=row.change_reason,
         created_at=row.created_at,
         transcript_redacted=row.transcript_redacted,
         transcript_hash=row.transcript_hash,
@@ -143,11 +144,16 @@ class IntakeRepository:
         await self._update(intake_id, slack_ts=slack_ts)
 
     async def apply_decision(
-        self, intake_id: UUID, status: IntakeStatus, decided_by: str
+        self,
+        intake_id: UUID,
+        status: IntakeStatus,
+        decided_by: str,
+        change_reason: str | None = None,
     ) -> IntakeDetail | None:
         """Record an Approval, only if the Intake is ``awaiting_approval``.
 
         The status guard makes repeated or retried clicks harmless.
+        ``change_reason`` is the reviewer's reason for Request changes.
 
         Returns:
             The updated Intake, or ``None`` if nothing changed (unknown Intake or
@@ -164,6 +170,7 @@ class IntakeRepository:
                     status=status.value,
                     approved_by=decided_by,
                     decided_at=datetime.now(UTC),
+                    change_reason=change_reason,
                 )
                 .returning(IntakeRow)
             )

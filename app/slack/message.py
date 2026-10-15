@@ -85,7 +85,7 @@ def _verdict_blocks(output: IntakeOutput) -> list[dict[str, Any]]:
             _list_section(
                 ":no_entry: *Issues: can't be done as the Client asked*",
                 [
-                    f"• *{_esc(v.integration)}*: {_esc(v.reason)}"
+                    f"• *{escape(v.integration)}*: {escape(v.reason)}"
                     for v in by_verdict["no"]
                 ],
             )
@@ -95,7 +95,7 @@ def _verdict_blocks(output: IntakeOutput) -> list[dict[str, Any]]:
             _list_section(
                 ":warning: *Partial: needs a workaround*",
                 [
-                    f"• *{_esc(v.integration)}*: {_esc(v.reason)}"
+                    f"• *{escape(v.integration)}*: {escape(v.reason)}"
                     for v in by_verdict["partial"]
                 ],
             )
@@ -104,24 +104,24 @@ def _verdict_blocks(output: IntakeOutput) -> list[dict[str, Any]]:
         blocks.append(
             _list_section(
                 ":white_check_mark: *Feasible*",
-                [f"• {_esc(v.integration)}" for v in by_verdict["yes"]],
+                [f"• {escape(v.integration)}" for v in by_verdict["yes"]],
             )
         )
     return blocks
 
 
 def _document_blocks(output: IntakeOutput) -> list[dict[str, Any]]:
-    systems = ", ".join(_esc(s) for s in output.current_systems)
+    systems = ", ".join(escape(s) for s in output.current_systems)
     return [
         _section(_truncate(f"*Current Systems*\n{systems or '_None_'}", SECTION_LIMIT)),
         _list_section(
             "*Proposed setup*",
-            [f"• *{_esc(c.name)}*: {_esc(c.purpose)}" for c in output.architecture],
+            [f"• *{escape(c.name)}*: {escape(c.purpose)}" for c in output.architecture],
         ),
         _list_section(
             "*Access to request*",
             [
-                f"• *{_esc(a.system)}*: {_esc(a.access)}"
+                f"• *{escape(a.system)}*: {escape(a.access)}"
                 for a in output.access_checklist
             ],
         ),
@@ -129,9 +129,11 @@ def _document_blocks(output: IntakeOutput) -> list[dict[str, Any]]:
 
 
 def _run_facts(intake: IntakeDetail, dashboard_url: str) -> str:
-    facts = [f"Model {_esc(intake.model_used or 'unknown')}"]
+    facts = [f"Model {escape(intake.model_used or 'unknown')}"]
     if intake.fallback_used:
-        reason = f" ({_esc(intake.fallback_reason)})" if intake.fallback_reason else ""
+        reason = (
+            f" ({escape(intake.fallback_reason)})" if intake.fallback_reason else ""
+        )
         facts.append(f":arrows_counterclockwise: Fallback{reason}")
     if intake.duration_ms is not None:
         facts.append(f"{intake.duration_ms / 1000:.1f} s")
@@ -181,6 +183,11 @@ def _truncate(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def _esc(text: str) -> str:
-    """Escape Slack's control characters so model text renders literally."""
+def escape(text: str) -> str:
+    """Escape Slack's control characters so untrusted text renders literally."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def quote(text: str) -> str:
+    """Escape ``text`` and render it as a Slack block quote, line by line."""
+    return "\n".join(f">{escape(line)}" for line in text.splitlines())

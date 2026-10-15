@@ -122,6 +122,7 @@ class IntakeSummary(BaseModel):
     duration_ms: int | None = None
     approved_by: str | None = None
     decided_at: datetime | None = None
+    change_reason: str | None = None
     created_at: datetime
 
 

@@ -22,6 +22,7 @@ class FakeSlackClient:
     def __init__(self) -> None:
         self.posts: list[dict[str, Any]] = []
         self.updates: list[dict[str, Any]] = []
+        self.views: list[dict[str, Any]] = []
 
     async def chat_postMessage(self, **kwargs: Any) -> dict[str, Any]:
         self.posts.append(kwargs)
@@ -29,6 +30,10 @@ class FakeSlackClient:
 
     async def chat_update(self, **kwargs: Any) -> dict[str, Any]:
         self.updates.append(kwargs)
+        return {"ok": True}
+
+    async def views_open(self, **kwargs: Any) -> dict[str, Any]:
+        self.views.append(kwargs)
         return {"ok": True}
 
 
@@ -215,6 +220,41 @@ async def test_update_keeps_the_details_the_reviewer_decided_on() -> None:
     text = "\n".join(block_texts(client.updates[0]["blocks"]))
     assert "Use a tracking number instead." in text
     assert "WordPress, Google Ads, Jobber" in text
+
+
+async def test_update_shows_the_change_reason_escaped() -> None:
+    client = FakeSlackClient()
+
+    await notifier(client).update_decision(
+        make_intake(
+            status=IntakeStatus.CHANGES_REQUESTED,
+            approved_by="U9",
+            change_reason="Mike said no app <!channel>",
+        )
+    )
+
+    text = "\n".join(block_texts(client.updates[0]["blocks"]))
+    assert "Changes requested by <@U9>" in text
+    assert "Mike said no app &lt;!channel&gt;" in text
+
+
+async def test_change_request_form_opens_with_the_trigger_and_intake_id() -> None:
+    client = FakeSlackClient()
+    intake = make_intake()
+
+    await notifier(client).open_change_request(intake, "123.456.abc")
+
+    call = client.views[0]
+    view = call["view"]
+    assert call["trigger_id"] == "123.456.abc"
+    assert view["type"] == "modal"
+    assert view["callback_id"] == "intake_change_request"
+    assert view["private_metadata"] == str(intake.id)
+    assert len(view["title"]["text"]) <= 24
+    reason = view["blocks"][-1]
+    assert reason["type"] == "input" and reason["block_id"] == "change_reason"
+    assert reason["element"]["action_id"] == "reason"
+    assert reason["element"]["multiline"] is True
 
 
 async def test_update_without_slack_ts_does_nothing() -> None:

@@ -28,6 +28,7 @@ SPEC_COLUMNS = {
     "slack_ts",
     "approved_by",
     "decided_at",
+    "change_reason",
     "created_at",
 }
 

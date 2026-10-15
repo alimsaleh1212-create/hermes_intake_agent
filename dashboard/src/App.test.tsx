@@ -184,6 +184,22 @@ describe("Intake detail", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows the reviewer's reason when changes were requested", async () => {
+    mockApi({
+      [`/intakes/${id}`]: () => ({
+        body: makeDetail({
+          status: "changes_requested",
+          approved_by: "U9",
+          change_reason: "Mike ruled out an app; drop that access.",
+        }),
+      }),
+    });
+    window.location.hash = `#/intakes/${id}`;
+    render(<App />);
+    const reason = await screen.findByText("Mike ruled out an app; drop that access.");
+    expect(reason.closest(".callout")).toHaveTextContent(/changes requested/i);
+  });
+
   it("handles an intake still processing (no output yet)", async () => {
     mockApi({
       [`/intakes/${id}`]: () => ({

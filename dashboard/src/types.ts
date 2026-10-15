@@ -48,6 +48,7 @@ export interface IntakeSummary {
   duration_ms: number | null;
   approved_by: string | null;
   decided_at: string | null;
+  change_reason: string | null;
   created_at: string;
 }
 

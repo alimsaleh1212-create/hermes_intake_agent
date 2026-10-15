@@ -59,6 +59,7 @@ class IntakeRow(Base):
     slack_ts: Mapped[str | None] = mapped_column(String(64))
     approved_by: Mapped[str | None] = mapped_column(String(200))
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    change_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )

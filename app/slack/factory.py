@@ -12,7 +12,7 @@ from app.schemas.intake import (
     IntakeDetail,
 )
 from app.slack.base import SlackNotifier
-from app.slack.message import headline, intake_blocks
+from app.slack.message import escape, headline, intake_blocks, quote
 
 ACTION_ID_BY_DECISION = {
     Decision.APPROVE: "intake_approve",
@@ -20,6 +20,12 @@ ACTION_ID_BY_DECISION = {
 }
 APPROVE_ACTION_ID = ACTION_ID_BY_DECISION[Decision.APPROVE]
 REQUEST_CHANGES_ACTION_ID = ACTION_ID_BY_DECISION[Decision.REQUEST_CHANGES]
+
+CHANGE_REQUEST_CALLBACK_ID = "intake_change_request"
+"""``callback_id`` of the form that asks what should change."""
+CHANGE_REASON_BLOCK_ID = "change_reason"
+CHANGE_REASON_ACTION_ID = "reason"
+CHANGE_REASON_MAX_LENGTH = 1000
 
 
 class NoopNotifier:
@@ -41,6 +47,15 @@ class NoopNotifier:
 
         Args:
             intake: The decided Intake (ignored).
+        """
+        return None
+
+    async def open_change_request(self, intake: IntakeDetail, trigger_id: str) -> None:
+        """Open nothing.
+
+        Args:
+            intake: The Intake (ignored).
+            trigger_id: The click's trigger (ignored).
         """
         return None
 
@@ -110,17 +125,63 @@ class SlackWebNotifier:
             return
         label = DECISION_LABEL[DECISION_BY_STATUS[intake.status]]
         decision = f"{label} by <@{intake.approved_by}>"
+        outcome = f"*{decision}*"
+        if intake.change_reason:
+            outcome += f"\n{quote(intake.change_reason)}"
         await self._client.chat_update(
             channel=self._channel_id,
             ts=intake.slack_ts,
             text=f"{intake.client_name}: {decision}",
             blocks=[
                 *intake_blocks(intake, self._dashboard_url),
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": f"*{decision}*"},
-                },
+                {"type": "section", "text": {"type": "mrkdwn", "text": outcome}},
             ],
+        )
+
+    async def open_change_request(self, intake: IntakeDetail, trigger_id: str) -> None:
+        """Open a form asking the reviewer what should change.
+
+        Submitting it sends a ``view_submission`` to ``/slack/actions`` carrying
+        the Intake ID in ``private_metadata``.
+
+        Args:
+            intake: The Intake whose Request changes button was clicked.
+            trigger_id: The click's ``trigger_id``.
+        """
+        await self._client.views_open(
+            trigger_id=trigger_id,
+            view={
+                "type": "modal",
+                "callback_id": CHANGE_REQUEST_CALLBACK_ID,
+                "private_metadata": str(intake.id),
+                "title": {"type": "plain_text", "text": "Request changes"},
+                "submit": {"type": "plain_text", "text": "Request changes"},
+                "close": {"type": "plain_text", "text": "Cancel"},
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*{escape(headline(intake))}*",
+                        },
+                    },
+                    {
+                        "type": "input",
+                        "block_id": CHANGE_REASON_BLOCK_ID,
+                        "label": {"type": "plain_text", "text": "What should change?"},
+                        "element": {
+                            "type": "plain_text_input",
+                            "action_id": CHANGE_REASON_ACTION_ID,
+                            "multiline": True,
+                            "max_length": CHANGE_REASON_MAX_LENGTH,
+                            "placeholder": {
+                                "type": "plain_text",
+                                "text": "e.g. Mike ruled out an app; drop that access.",
+                            },
+                        },
+                    },
+                ],
+            },
         )
 
 

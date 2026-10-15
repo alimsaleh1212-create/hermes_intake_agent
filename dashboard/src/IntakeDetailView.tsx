@@ -286,8 +286,17 @@ export default function IntakeDetailView({ id, submission }: { id: string; submi
 
       <Progress intake={intake} />
 
-      {(intake.injection_flagged || intake.fallback_used || intake.error) && (
+      {(intake.injection_flagged || intake.fallback_used || intake.error || intake.change_reason) && (
         <div className="flags">
+          {intake.change_reason && (
+            <div className="callout callout-info">
+              <Undo2 aria-hidden size={18} />
+              <div>
+                <strong>Changes requested {reviewer(intake.approved_by)}</strong>
+                <p className="change-reason">{intake.change_reason}</p>
+              </div>
+            </div>
+          )}
           {intake.injection_flagged && (
             <div className="callout callout-warn">
               <ShieldAlert aria-hidden size={18} />
