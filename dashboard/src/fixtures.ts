@@ -25,7 +25,7 @@ export function makeSummary(over: Partial<IntakeSummary> = {}): IntakeSummary {
 export function makeDetail(over: Partial<IntakeDetail> = {}): IntakeDetail {
   return {
     ...makeSummary(),
-    transcript_redacted: "Hi, I am [EMAIL] and we run Shopify.",
+    transcript_redacted: "Hi, I am [EMAIL_1] and we run Shopify.",
     transcript_hash: "abc",
     slack_ts: null,
     output: {
