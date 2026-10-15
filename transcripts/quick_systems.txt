@@ -1,0 +1,9 @@
+Agency: What runs the business today, Lena?
+
+Lena: A Wix site, Google Calendar for estimates, and QuickBooks for invoices.
+
+Agency: What should we fix first?
+
+Lena: Leads from the Wix form should land on my calendar as estimate slots. And when I miss a call, text the caller back from my personal cell. No new number, no forwarding, no app.
+
+Agency: Got it. We'll send a plan and an access checklist.

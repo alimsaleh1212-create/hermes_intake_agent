@@ -786,6 +786,18 @@ button {
   gap: 8px;
 }
 
+.samples + .samples {
+  margin-top: 20px;
+}
+
+.samples-group {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .sample {
   display: grid;
   gap: 3px;
