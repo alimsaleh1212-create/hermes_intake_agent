@@ -73,12 +73,15 @@ Redaction, flagging and the API key sit between the Client and the model:
 
 ```bash
 scripts/setup_wizard.sh local    # stages 1-3: dedicated Hermes home + gateway on 8643, Groq + OpenRouter keys, OpenRouter privacy
+scripts/setup_wizard.sh demo     # after local: Slack app + this laptop behind a cloudflared quick tunnel, to record before deploying
 scripts/setup_wizard.sh deploy   # stages 4-8: Slack app, Supabase, GCP VM + Caddy, Vercel dashboard, optional cloudflared tunnel
 ```
 
 **Separate Hermes home.** The Intake service has its own Hermes: home `~/.hermes-intake` (Hermes picks its home from the `HERMES_HOME` environment variable, `hermes_constants.get_hermes_home`), its own `.env`, config and skills, and its gateway on `127.0.0.1:8643` (`API_SERVER_PORT` in that `.env`) as the systemd user unit `hermes-intake-gateway`. A personal Hermes in `~/.hermes` (default port 8642, unit `hermes-gateway`) is never read, written or restarted by the wizard. Use `INTAKE_HERMES_HOME` / `INTAKE_HERMES_PORT` to move it. Logs: `journalctl --user -u hermes-intake-gateway`.
 
 The local stages are enough to start the e2e before any deploy. Re-running is safe: existing values and generated keys are reused.
+
+**Recording before deploying (`demo`).** Runs the Slack app stage (skipped if Slack is already in `.env`), then copies any missing model keys from the Hermes `.env` (the direct path and Layer 2 Fallback read them from `.env`), checks the gateway, writes `VITE_API_URL=http://localhost:8000` to `dashboard/.env.local`, and walks you through `docker compose --profile dev up -d --build`, `cloudflared tunnel --url http://127.0.0.1:8000` and setting Slack's Interactivity URL to `<tunnel>/slack/actions`. A quick-tunnel URL changes whenever cloudflared restarts, so keep it running across takes, or re-run `demo`. Then `cd dashboard && npm run dev` and do the click-through below against the tunnel URL instead of the VM host.
 
 ## Deploy
 
@@ -114,7 +117,7 @@ uv run pytest -m e2e tests/e2e -s
 - It submits the three demo Transcripts `E2E_SUBMIT_GAP` seconds apart (default 30, Groq free tier allows 8K tokens per minute), so a run takes about 2 to 3 minutes.
 - It checks: valid Intake Output and primary model; Mike's Roofing has 3 Current Systems and 1 Issue (the assertion is strict, and the model may disagree: report the real counts rather than loosening it); PII placeholders with no raw values in API responses, database or API logs; `injection_flagged`; a signed Slack Approve gives `approved` and `approved_by`; and a forced Fallback (invalid Groq key, or in Hermes mode an unreachable gateway so Layer 2 answers) gives `fallback_used=true` with the OpenRouter model.
 
-### Manual Slack click-through (on the VM)
+### Manual Slack click-through (on the VM, or the `demo` tunnel)
 
 1. Check `.env` on the VM has `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_CHANNEL_ID` and `INTAKE_API_KEY`, and that the Slack app's Interactivity URL is `https://<your-host>/slack/actions`. Then `docker compose up -d --build`.
 2. Submit: `curl -X POST https://<your-host>/intakes -H "X-API-Key: $INTAKE_API_KEY" -H 'Content-Type: application/json' -d "$(jq -n --rawfile t transcripts/mikes_roofing.txt '{client_name:"Mike'"'"'s Roofing",transcript:$t}')"`.

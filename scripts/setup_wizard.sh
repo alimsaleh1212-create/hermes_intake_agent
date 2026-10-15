@@ -152,9 +152,11 @@ finish() {
 # the whole file before the first prompt, so an edit mid-run can't break it.
 # ──────────────────────────────────────────────────────────────────────────
 
-# Usage: scripts/setup_wizard.sh [local|deploy|all]   (default: asks)
+# Usage: scripts/setup_wizard.sh [local|demo|deploy|all]   (default: asks)
 #   local  = stages 1-3: dedicated Hermes home (~/.hermes-intake, gateway on 127.0.0.1:8643),
 #            model keys, OpenRouter privacy (enough to start the e2e)
+#   demo   = after local: Slack app, then the local stack behind a cloudflared quick
+#            tunnel so Slack's buttons reach this laptop (record before any deploy)
 #   deploy = stages 4-8: Slack, Supabase, GCP VM, Vercel, optional tunnel
 # Values go into ./.env, updated in place: other keys are never touched, and key
 # names match case-insensitively so existing lowercase names are reused. Secrets
@@ -175,6 +177,7 @@ HERMES_UNIT="hermes-intake-gateway"
 HERMES_UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 HERMES_TEMPLATE="app/agents/assets/hermes-config.yaml.template"
 HERMES_SKILL_SRC="app/agents/assets/client-intake/SKILL.md"
+MODE=""
 HERMES_INSTALLER="https://hermes-agent.nousresearch.com/install.sh"
 
 # ── Extra helpers (stage-level, not part of the library above) ────────────
@@ -231,9 +234,9 @@ http_status() {
   local args=(-sS -m 45 -o "$HTTP_BODY_FILE" -w '%{http_code}' -X "$method")
   if [[ -n "$body" ]]; then args+=(-H 'Content-Type: application/json' --data "$body"); fi
   if [[ -n "$token" ]]; then
-    printf 'header = "Authorization: Bearer %s"\n' "$token" | curl -K - "${args[@]}" "$url" 2>/dev/null || printf '000'
+    printf 'header = "Authorization: Bearer %s"\n' "$token" | curl -K - "${args[@]}" "$url" 2>/dev/null || true
   else
-    curl "${args[@]}" "$url" 2>/dev/null || printf '000'
+    curl "${args[@]}" "$url" 2>/dev/null || true
   fi
 }
 
@@ -437,6 +440,11 @@ stage_openrouter_privacy() {
 
 stage_slack() {
   stage "Slack app"
+  if env_read "$ENV_FILE" SLACK_BOT_TOKEN >/dev/null && env_read "$ENV_FILE" SLACK_SIGNING_SECRET >/dev/null \
+    && env_read "$ENV_FILE" SLACK_CHANNEL_ID >/dev/null && ! confirm "Slack is already in $ENV_FILE (not shown). Set it up again?"; then
+    say "Keeping the Slack values in $ENV_FILE."
+    return 0
+  fi
   open_url "https://api.slack.com/apps"
   step "Create New App → From scratch; pick your workspace."
   step "OAuth & Permissions → Bot Token Scopes → add chat:write. Install to Workspace."
@@ -450,7 +458,11 @@ stage_slack() {
   env_set "$ENV_FILE" SLACK_BOT_TOKEN "$SLACK_BOT_TOKEN"
   env_set "$ENV_FILE" SLACK_SIGNING_SECRET "$SLACK_SIGNING_SECRET"
   env_set "$ENV_FILE" SLACK_CHANNEL_ID "$SLACK_CHANNEL_ID"
-  note "The Interactivity URL is set in the VM stage, once the public host exists."
+  if [[ "$MODE" == demo ]]; then
+    note "The Interactivity URL is set in the next stage, once the tunnel exists."
+  else
+    note "The Interactivity URL is set in the VM stage, once the public host exists."
+  fi
   pause "Press Enter to continue"
 }
 
@@ -534,27 +546,96 @@ stage_tunnel() {
   pause "Press Enter to finish"
 }
 
+# stage_demo: run the stack on this laptop behind a cloudflared quick tunnel and point
+# Slack's Interactivity URL at it. A quick-tunnel URL changes on every cloudflared
+# restart, so re-run `demo` after a restart (Slack values are kept).
+stage_demo() {
+  stage "Local stack, cloudflared tunnel, Slack Interactivity URL"
+  local k code url gw
+  # The direct path and Layer 2 Fallback read the model keys from $ENV_FILE, not Hermes.
+  for k in GROQ_API_KEY OPENROUTER_API_KEY; do
+    if ! env_read "$ENV_FILE" "$k" >/dev/null; then
+      if env_read "$HERMES_ENV" "$k" >/dev/null; then
+        env_set "$ENV_FILE" "$k" "$(env_read "$HERMES_ENV" "$k")"
+      else
+        warn "$k is missing; run: scripts/setup_wizard.sh local"
+        SKIPPED+=("$k missing: run the local stages")
+      fi
+    fi
+  done
+  if [[ "$(env_read "$ENV_FILE" HERMES_ENABLED || echo true)" == true ]]; then
+    gw=$(env_read "$ENV_FILE" HERMES_BASE_URL || echo "http://127.0.0.1:$HERMES_PORT")
+    code=$(http_status GET "$gw/health")
+    [[ "$code" == 200 ]] && say "Hermes gateway at $gw answers." \
+      || warn "Hermes gateway at $gw returned $code; Intakes will go to the Fallback model. See: journalctl --user -u $HERMES_UNIT"
+  fi
+  env_set dashboard/.env.local VITE_API_URL http://localhost:8000
+
+  if ! command -v cloudflared >/dev/null 2>&1; then
+    open_url "https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"
+    step "Install cloudflared for your OS, then come back."
+    pause "Press Enter when installed"
+  fi
+  if ! command -v cloudflared >/dev/null 2>&1; then
+    SKIPPED+=("cloudflared not installed: Slack buttons cannot reach the API")
+    return 0
+  fi
+
+  say "In a second terminal, from the repo root, start the stack and the tunnel:"
+  note "  docker compose --profile dev up -d --build"
+  note "  cloudflared tunnel --url http://127.0.0.1:8000"
+  note "Keep cloudflared running for every take: a restart gives a new URL."
+  step "Copy the https://<words>.trycloudflare.com URL that cloudflared prints."
+  ask TUNNEL_URL "Paste the tunnel URL:" || { SKIPPED+=("tunnel URL not given"); return 0; }
+  url="${TUNNEL_URL%/}"
+  [[ -n "$url" ]] || { SKIPPED+=("tunnel URL not given: re-run demo"); return 0; }
+  [[ "$url" == http://* || "$url" == https://* ]] || url="https://$url"
+  code=$(http_status GET "$url/health")
+  if [[ "$code" == 200 ]]; then
+    say "✓ $url/health answers."
+  else
+    warn "$url/health returned $code; check docker compose ps and the cloudflared output."
+    SKIPPED+=("tunnel health check returned $code")
+  fi
+
+  open_url "https://api.slack.com/apps"
+  step "Your app → Interactivity & Shortcuts → On → Request URL: $url/slack/actions → Save."
+  pause "Press Enter once Slack shows the URL as verified"
+  say "Dashboard, in a third terminal:"
+  note "  cd dashboard && npm run dev    # then open http://localhost:5173"
+  say "Before recording, submit one Transcript and click Approve in Slack (README: Manual Slack click-through)."
+  pause "Press Enter to finish"
+}
+
 run_wizard() {
   cd "$(dirname "${BASH_SOURCE[0]}")/.."
   local mode="${1:-}"
   if [[ -z "$mode" ]]; then
-    say "Which part? local = Hermes + model keys (stages 1-3); deploy = Slack, Supabase, VM, Vercel, tunnel (4-8); all."
-    read -r -p "  [local/deploy/all] " mode || mode=local
+    say "Which part? local = Hermes + model keys (stages 1-3); demo = Slack + laptop tunnel for recording;"
+    say "deploy = Slack, Supabase, VM, Vercel, tunnel (4-8); all."
+    read -r -p "  [local/demo/deploy/all] " mode || mode=local
   fi
   case "$mode" in
     local)  TOTAL_STAGES=3 ;;
+    demo)   TOTAL_STAGES=2 ;;
     deploy) TOTAL_STAGES=5 ;;
     all)    TOTAL_STAGES=8 ;;
-    *) echo "usage: $0 [local|deploy|all]" >&2; return 2 ;;
+    *) echo "usage: $0 [local|demo|deploy|all]" >&2; return 2 ;;
   esac
+  MODE="$mode"
   if [[ ! -f "$ENV_FILE" ]]; then
     if [[ -f .env.example ]]; then (umask 077 && cp .env.example "$ENV_FILE"); else (umask 077 && : > "$ENV_FILE"); fi
   fi
   chmod 600 "$ENV_FILE" 2>/dev/null || true
 
   banner "Hermes Intake setup ($mode)"
-  if [[ "$mode" != deploy ]]; then stage_hermes; stage_model_keys; stage_openrouter_privacy; fi
-  if [[ "$mode" != local ]]; then stage_slack; stage_supabase; stage_vm; stage_vercel; stage_tunnel; fi
+  case "$mode" in
+    demo) stage_slack; stage_demo ;;
+    *)
+      if [[ "$mode" != deploy ]]; then stage_hermes; stage_model_keys; stage_openrouter_privacy; fi
+      if [[ "$mode" != local ]]; then stage_slack; stage_supabase; stage_vm; stage_vercel; stage_tunnel; fi
+      ;;
+  esac
   finish
 }
 
