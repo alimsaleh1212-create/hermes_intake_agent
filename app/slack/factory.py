@@ -12,6 +12,7 @@ from app.schemas.intake import (
     IntakeDetail,
 )
 from app.slack.base import SlackNotifier
+from app.slack.message import headline, intake_blocks
 
 ACTION_ID_BY_DECISION = {
     Decision.APPROVE: "intake_approve",
@@ -47,13 +48,20 @@ class NoopNotifier:
 class SlackWebNotifier:
     """``SlackNotifier`` that posts and edits messages through the Web API."""
 
-    def __init__(self, client: AsyncWebClient, channel_id: str) -> None:
-        """Store the Slack Web API client and the target channel."""
+    def __init__(
+        self, client: AsyncWebClient, channel_id: str, dashboard_url: str = ""
+    ) -> None:
+        """Store the Slack Web API client, the target channel and dashboard URL."""
         self._client = client
         self._channel_id = channel_id
+        self._dashboard_url = dashboard_url
 
     async def post_intake_ready(self, intake: IntakeDetail) -> str | None:
         """Post the "intake ready" message with Approve and Request changes buttons.
+
+        The message lists Issues and partial verdicts with reasons, Current
+        Systems, the proposed setup and the access to request, so the reviewer
+        can decide from Slack.
 
         Args:
             intake: The Intake now awaiting approval.
@@ -61,21 +69,9 @@ class SlackWebNotifier:
         Returns:
             The Slack message timestamp (``ts``), used later to edit the message.
         """
-        output = intake.output
-        systems = len(output.current_systems) if output else 0
-        issues = sum(v.verdict == "no" for v in output.feasibility) if output else 0
-        noun = "issue" if issues == 1 else "issues"
-        text = (
-            f"New intake: {intake.client_name}. "
-            f"{systems} systems found, {issues} {noun} flagged"
-        )
-        summary = f"*New intake:* {intake.client_name}\n{systems} systems found, "
-        summary += f"{issues} {noun} flagged"
-        if intake.injection_flagged:
-            summary += "\n:warning: Injection Flag: the Transcript looked suspicious"
         value = str(intake.id)
         blocks: list[dict[str, Any]] = [
-            {"type": "section", "text": {"type": "mrkdwn", "text": summary}},
+            *intake_blocks(intake, self._dashboard_url),
             {
                 "type": "actions",
                 "block_id": "intake_actions",
@@ -98,12 +94,14 @@ class SlackWebNotifier:
             },
         ]
         response = await self._client.chat_postMessage(
-            channel=self._channel_id, text=text, blocks=blocks
+            channel=self._channel_id, text=headline(intake), blocks=blocks
         )
         return str(response["ts"])
 
     async def update_decision(self, intake: IntakeDetail) -> None:
         """Replace the buttons with the decision and who made it.
+
+        The details stay, so the message records what was decided on.
 
         Args:
             intake: The decided Intake; nothing happens if it has no ``slack_ts``.
@@ -117,13 +115,11 @@ class SlackWebNotifier:
             ts=intake.slack_ts,
             text=f"{intake.client_name}: {decision}",
             blocks=[
+                *intake_blocks(intake, self._dashboard_url),
                 {
                     "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*{intake.client_name}*: {decision}",
-                    },
-                }
+                    "text": {"type": "mrkdwn", "text": f"*{decision}*"},
+                },
             ],
         )
 
@@ -152,4 +148,6 @@ def build_notifier(
     """
     if slack_client is None or not settings.slack_channel_id:
         return NoopNotifier()
-    return SlackWebNotifier(slack_client, settings.slack_channel_id)
+    return SlackWebNotifier(
+        slack_client, settings.slack_channel_id, settings.dashboard_url
+    )
