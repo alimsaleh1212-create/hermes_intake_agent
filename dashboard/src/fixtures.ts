@@ -8,6 +8,7 @@ export function makeSummary(over: Partial<IntakeSummary> = {}): IntakeSummary {
     error: null,
     model_used: "openai/gpt-oss-120b",
     fallback_used: false,
+    fallback_reason: null,
     injection_flagged: false,
     tokens_in: 1000,
     tokens_out: 500,

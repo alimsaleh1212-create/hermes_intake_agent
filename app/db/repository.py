@@ -24,6 +24,7 @@ def _to_detail(row: IntakeRow) -> IntakeDetail:
         error=row.error,
         model_used=row.model_used,
         fallback_used=row.fallback_used,
+        fallback_reason=row.fallback_reason,
         injection_flagged=row.injection_flagged,
         tokens_in=row.tokens_in,
         tokens_out=row.tokens_out,
@@ -46,6 +47,7 @@ class IntakeRepository:
     """Persistence for Intakes."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        """Store the session factory; each method opens its own session."""
         self._session_factory = session_factory
 
     async def create(
@@ -115,6 +117,7 @@ class IntakeRepository:
             output_json=output.model_dump(mode="json"),
             model_used=usage.model_used,
             fallback_used=usage.fallback_used,
+            fallback_reason=usage.fallback_reason,
             tokens_in=usage.tokens_in,
             tokens_out=usage.tokens_out,
             cost_usd=usage.cost_usd,

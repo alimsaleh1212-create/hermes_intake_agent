@@ -11,17 +11,17 @@ import httpx
 from fastapi import Depends, Request
 from slack_sdk.web.async_client import AsyncWebClient
 
-from app.agents.base import IntakeAgent
-from app.agents.factory import build_agent
+from app.agents.factory import IntakeAgent, build_agent
 from app.core.config import Settings
-from app.db.factory import build_repository
-from app.db.repository import IntakeRepository
-from app.guardrails.base import InjectionDetector, Redactor
-from app.guardrails.factory import build_injection_detector, build_redactor
-from app.services.factory import build_intake_service
-from app.services.intake_service import IntakeService
-from app.slack.base import SlackNotifier
-from app.slack.factory import build_notifier
+from app.db.factory import IntakeRepository, build_repository
+from app.guardrails.factory import (
+    InjectionDetector,
+    Redactor,
+    build_injection_detector,
+    build_redactor,
+)
+from app.services.factory import IntakeService, build_intake_service
+from app.slack.factory import SlackNotifier, build_notifier
 
 
 def get_settings(request: Request) -> Settings:

@@ -71,6 +71,7 @@ class FakeAgent:
         result: AgentResult | None = None,
         error: IntakeAgentError | None = None,
     ) -> None:
+        """Store the fixed result or the error to raise."""
         self.result = result or AgentResult(
             output=MIKES_ROOFING_OUTPUT, usage=FAKE_USAGE
         )

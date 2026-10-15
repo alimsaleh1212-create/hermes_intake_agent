@@ -1,12 +1,13 @@
 """Submitting an Intake and seeing it completed, through the HTTP seam."""
 
 import uuid
+from dataclasses import replace
 from pathlib import Path
 
 import httpx
 from fastapi import FastAPI
 
-from app.agents.base import IntakeAgentError
+from app.agents.base import AgentResult, IntakeAgentError
 from app.agents.fake import FakeAgent
 from app.deps import get_notifier
 from tests.fakes import BrokenNotifier, RecordingNotifier
@@ -135,3 +136,32 @@ async def test_slack_failure_does_not_fail_the_intake(
 
     assert body["status"] == "awaiting_approval"
     assert body["slack_ts"] is None
+
+
+async def test_intake_detail_exposes_why_the_fallback_happened(
+    api_client: httpx.AsyncClient, fake_agent: FakeAgent
+) -> None:
+    fake_agent.result = AgentResult(
+        output=fake_agent.result.output,
+        usage=replace(
+            fake_agent.result.usage, fallback_used=True, fallback_reason="timeout"
+        ),
+    )
+    intake_id = (await submit(api_client)).json()["id"]
+
+    detail = (await api_client.get(f"/intakes/{intake_id}")).json()
+    listed = (await api_client.get("/intakes")).json()
+
+    assert detail["fallback_used"] is True
+    assert detail["fallback_reason"] == "timeout"
+    assert listed[0]["fallback_reason"] == "timeout"
+
+
+async def test_fallback_reason_is_null_without_a_fallback(
+    api_client: httpx.AsyncClient,
+) -> None:
+    intake_id = (await submit(api_client)).json()["id"]
+
+    detail = (await api_client.get(f"/intakes/{intake_id}")).json()
+
+    assert detail["fallback_reason"] is None

@@ -48,6 +48,7 @@ class SlackWebNotifier:
     """``SlackNotifier`` that posts and edits messages through the Web API."""
 
     def __init__(self, client: AsyncWebClient, channel_id: str) -> None:
+        """Store the Slack Web API client and the target channel."""
         self._client = client
         self._channel_id = channel_id
 

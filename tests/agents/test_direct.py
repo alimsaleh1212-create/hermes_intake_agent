@@ -114,3 +114,28 @@ async def test_direct_agent_completes_an_intake_through_the_api(
     assert body["cost_usd"] == 0
     assert body["est_cost_usd"] == pytest.approx(0.00016 + 0.000225)
     assert body["output"]["current_systems"]
+
+
+async def test_primary_success_has_no_fallback_reason() -> None:
+    agent = make_agent(lambda r: ok(), lambda r: ok())
+
+    assert (await agent.run(REDACTED)).usage.fallback_reason is None
+
+
+@pytest.mark.parametrize(
+    ("failure", "reason"),
+    [
+        ("timeout", "timeout"),
+        ("429", "provider 429"),
+        ("503", "provider 503"),
+        ("schema_mismatch", "invalid_output"),
+        ("connect_error", "gateway_unreachable"),
+    ],
+)
+async def test_fallback_to_the_secondary_records_why(failure: str, reason: str) -> None:
+    agent = make_agent(FAILURES[failure], lambda r: ok())
+
+    usage = (await agent.run(REDACTED)).usage
+
+    assert usage.fallback_used is True
+    assert usage.fallback_reason == reason

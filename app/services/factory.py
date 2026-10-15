@@ -6,6 +6,11 @@ from app.guardrails.base import InjectionDetector, Redactor
 from app.services.intake_service import IntakeService
 from app.slack.base import SlackNotifier
 
+__all__ = [
+    "IntakeService",
+    "build_intake_service",
+]
+
 
 def build_intake_service(
     repository: IntakeRepository,
