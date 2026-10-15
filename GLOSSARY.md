@@ -41,7 +41,10 @@ A Feasibility Verdict of "no". A "partial" verdict is not an Issue.
 _Avoid_: Problem, blocker, risk
 
 **Approval**:
-A person's Approve or Request changes decision on an Intake, made in Slack.
+A person's Approve or Request changes decision on an Intake, made in Slack. Request changes carries a Change Reason.
+
+**Change Reason**:
+What the reviewer says should change, typed in Slack when they click Request changes. It is recorded on the Intake; it does not re-run it.
 
 **Injection Flag**:
 A marker on an Intake whose Transcript contained phrases that try to instruct the agent.

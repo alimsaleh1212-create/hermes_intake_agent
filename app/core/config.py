@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     slack_signing_secret: SecretStr = SecretStr("")
     slack_channel_id: str = ""
     slack_signature_max_age_seconds: int = 300
+    dashboard_url: str = ""  # base URL for the Slack message's dashboard link
 
     # --- API surface ---
     intake_api_key: SecretStr = SecretStr("")

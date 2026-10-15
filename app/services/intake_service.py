@@ -140,20 +140,41 @@ class IntakeService:
         """Return one Intake, or ``None`` if unknown."""
         return await self._repository.get(intake_id)
 
+    async def start_change_request(self, intake_id: UUID, trigger_id: str) -> None:
+        """Open the Slack form asking the reviewer what should change.
+
+        Does nothing unless the Intake is ``awaiting_approval``, so a click on a
+        decided Intake opens no form. A Slack failure is logged, never raised.
+        """
+        intake = await self._repository.get(intake_id)
+        if intake is None or intake.status != IntakeStatus.AWAITING_APPROVAL:
+            return
+        try:
+            await self._notifier.open_change_request(intake, trigger_id)
+        except Exception as error:  # noqa: BLE001 - the click must still be acked
+            logger.error(
+                "Slack form failed for Intake %s: %s", intake_id, type(error).__name__
+            )
+
     async def record_decision(
-        self, intake_id: UUID, decision: Decision, decided_by: str
+        self,
+        intake_id: UUID,
+        decision: Decision,
+        decided_by: str,
+        change_reason: str | None = None,
     ) -> IntakeDetail | None:
         """Apply an Approval from Slack (#7).
 
         Moves ``awaiting_approval`` to ``approved`` or ``changes_requested`` and
-        records ``approved_by`` and ``decided_at``, then edits the Slack message.
-        From any other status nothing changes, so repeated clicks are harmless.
+        records ``approved_by``, ``decided_at`` and, for Request changes, the
+        reviewer's ``change_reason``, then edits the Slack message. From any
+        other status nothing changes, so repeated clicks are harmless.
 
         Returns:
             The updated Intake, or ``None`` if nothing changed.
         """
         decided = await self._repository.apply_decision(
-            intake_id, DECISION_STATUS[decision], decided_by
+            intake_id, DECISION_STATUS[decision], decided_by, change_reason
         )
         if decided is None:
             return None

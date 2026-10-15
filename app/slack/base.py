@@ -23,7 +23,16 @@ class SlackNotifier(Protocol):
     async def update_decision(self, intake: IntakeDetail) -> None:
         """Edit the original message to show the decision and who made it.
 
-        Removes the buttons. Does nothing when ``intake.slack_ts`` is ``None`` or
-        no bot token is configured.
+        Removes the buttons and shows the change reason, if any. Does nothing
+        when ``intake.slack_ts`` is ``None`` or no bot token is configured.
+        """
+        ...
+
+    async def open_change_request(self, intake: IntakeDetail, trigger_id: str) -> None:
+        """Open the form asking the reviewer what should change.
+
+        Args:
+            intake: The Intake whose Request changes button was clicked.
+            trigger_id: The click's ``trigger_id``; Slack honours it for 3 s.
         """
         ...

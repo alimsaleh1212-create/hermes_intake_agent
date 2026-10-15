@@ -522,7 +522,8 @@ stage_vercel() {
   cors=$(env_read "$ENV_FILE" CORS_ORIGINS || echo "http://localhost:5173")
   [[ ",$cors," == *",$origin,"* ]] || cors="$cors,$origin"
   env_set "$ENV_FILE" CORS_ORIGINS "$cors"
-  note "Copy the updated .env to the VM and restart the API so CORS takes effect."
+  env_set "$ENV_FILE" DASHBOARD_URL "$origin"
+  note "Copy the updated .env to the VM and restart the API so CORS and the Slack dashboard link take effect."
   pause "Press Enter to continue"
 }
 
@@ -570,6 +571,7 @@ stage_demo() {
       || warn "Hermes gateway at $gw returned $code; Intakes will go to the Fallback model. See: journalctl --user -u $HERMES_UNIT"
   fi
   env_set dashboard/.env.local VITE_API_URL http://localhost:8000
+  env_read "$ENV_FILE" DASHBOARD_URL >/dev/null || env_set "$ENV_FILE" DASHBOARD_URL http://localhost:5173
 
   if ! command -v cloudflared >/dev/null 2>&1; then
     open_url "https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"

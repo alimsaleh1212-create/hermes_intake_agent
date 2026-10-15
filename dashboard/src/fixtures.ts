@@ -17,6 +17,7 @@ export function makeSummary(over: Partial<IntakeSummary> = {}): IntakeSummary {
     duration_ms: 4200,
     approved_by: null,
     decided_at: null,
+    change_reason: null,
     created_at: "2026-10-14T10:00:00Z",
     ...over,
   };

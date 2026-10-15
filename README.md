@@ -46,7 +46,7 @@ transcripts/              # demo Transcripts
 dashboard/                # React (Vite) dashboard
 ```
 
-Status lifecycle: `processing` → `awaiting_approval` → `approved` | `changes_requested`; any agent failure after both models → `failed`.
+Status lifecycle: `processing` → `awaiting_approval` → `approved` | `changes_requested`; any agent failure after both models → `failed`. Request changes opens a Slack form, and the reviewer's reason is stored as `change_reason`; the Intake is not re-run.
 
 <!-- TODO(#4): models, Estimated Cost. -->
 
@@ -96,7 +96,7 @@ Server (one VM, Hermes on the host, API in Docker, Caddy in front):
 3. Hermes: run `scripts/setup_wizard.sh local` as the service user (it installs the user unit `hermes-intake-gateway`), or, for a system-wide unit, copy `deploy/hermes-intake-gateway.service` and replace `__SERVICE_USER__` and `__HOME__` with the user who installed Hermes and their home directory. Never add an `ExecStopPost` kill.
 4. API: `sudo cp deploy/intake-compose.service /etc/systemd/system/ && sudo systemctl enable --now intake-compose`. The container itself has `restart: unless-stopped`, and the unit re-runs `docker compose up -d` on boot.
 5. Caddy: put your free hostname in `deploy/Caddyfile`, copy it to `/etc/caddy/Caddyfile` and run `sudo systemctl reload caddy`. Caddy gets the HTTPS certificate automatically and proxies to `127.0.0.1:8000`.
-6. Dashboard: deploy `dashboard/` to Vercel and add its origin to `CORS_ORIGINS`.
+6. Dashboard: deploy `dashboard/` to Vercel, add its origin to `CORS_ORIGINS` and set `DASHBOARD_URL` to it (the Slack message links to the Intake there).
 
 Syntax checks: `systemd-analyze verify deploy/*.service` and `caddy validate --config deploy/Caddyfile`.
 
@@ -121,6 +121,7 @@ uv run pytest -m e2e tests/e2e -s
 
 1. Check `.env` on the VM has `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_CHANNEL_ID` and `INTAKE_API_KEY`, and that the Slack app's Interactivity URL is `https://<your-host>/slack/actions`. Then `docker compose up -d --build`.
 2. Submit from the dashboard: **New intake**, pick a demo Transcript (or paste one, or drop a `.txt`), paste `INTAKE_API_KEY` the first time (it stays in that browser's localStorage, never in the built bundle), then **Submit intake**. The page opens the new Intake and follows it live. The dashboard's origin must be in `CORS_ORIGINS`. Re-submitting the same Transcript opens the existing Intake, so for a fresh take reset the database (`docker compose --profile dev down -v`). Without the dashboard: `curl -X POST https://<your-host>/intakes -H "X-API-Key: $INTAKE_API_KEY" -H 'Content-Type: application/json' -d "$(jq -n --rawfile t transcripts/mikes_roofing.txt '{client_name:"Mike'"'"'s Roofing",transcript:$t}')"`.
-3. Within about a minute the message appears in the Slack channel with Approve and Request changes buttons.
+3. Within about a minute the message appears in the Slack channel: the Issues and partial verdicts with their reasons, Current Systems, the proposed setup, the access to request, the model, Fallback, duration and cost, a dashboard link (when `DASHBOARD_URL` is set), and Approve and Request changes buttons.
 4. Click Approve. The message should update to show who approved, and `GET /intakes/<id>` (or the dashboard) shows `approved` with `approved_by` set.
-5. Click again: nothing changes (a decision is final). If the click shows a Slack error, check the signing secret and that Caddy proxies `/slack/actions`.
+5. On another Intake, click Request changes: a form asks what should change. Submit a reason; the message shows it under "Changes requested by @you", and the dashboard shows `changes_requested` with the reason. A blank reason is refused in the form.
+6. Click again: nothing changes (a decision is final). If the click shows a Slack error, check the signing secret and that Caddy proxies `/slack/actions`.
