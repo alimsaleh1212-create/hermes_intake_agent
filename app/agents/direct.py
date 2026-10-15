@@ -30,7 +30,11 @@ CRM, instant SMS reply, missed-call text-back, weekly report.
 - access_checklist: logins, keys and permissions to obtain (system and access), \
 e.g. Google Ads admin, WordPress login, Jobber API key, DNS access.
 - feasibility: one entry per integration (integration, verdict yes/partial/no, \
-reason). Use "no" only when the integration cannot be done.
+reason). Use "partial" when it needs a workaround the Client has not ruled out, \
+and "no" when it cannot be done as the Client asked. If the Client rules out every \
+workaround (e.g. a new number, forwarding or an app), the verdict is "no", not \
+"partial". Include the integrations behind each proposed architecture component, \
+such as missed-call text-back from the Client's phone.
 """
 
 
