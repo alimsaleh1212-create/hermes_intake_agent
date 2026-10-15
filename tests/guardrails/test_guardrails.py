@@ -105,3 +105,19 @@ def test_demo_transcripts() -> None:
     assert detector.is_flagged((TRANSCRIPTS / "injection_example.txt").read_text())
     assert not detector.is_flagged((TRANSCRIPTS / "mikes_roofing.txt").read_text())
     assert not detector.is_flagged((TRANSCRIPTS / "pii_example.txt").read_text())
+
+
+def test_quick_demo_transcripts() -> None:
+    quick = {
+        f: (TRANSCRIPTS / f"quick_{f}.txt").read_text()
+        for f in ("systems", "pii", "injection")
+    }
+
+    assert detector.is_flagged(quick["injection"])
+    assert not detector.is_flagged(quick["systems"])
+    assert not detector.is_flagged(quick["pii"])
+    redacted = redactor.redact(quick["pii"])
+    for placeholder in ("[EMAIL_1]", "[PHONE_1]", "[ADDRESS_1]"):
+        assert placeholder in redacted
+    for raw in ("sam@oakpinecarpentry.com", "555-0164", "77 Elm Street"):
+        assert raw not in redacted

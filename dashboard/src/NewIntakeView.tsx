@@ -12,7 +12,7 @@ import { type DragEvent, type FormEvent, useId, useRef, useState } from "react";
 
 import { ApiError, type Submission, submitIntake } from "./api";
 import { loadApiKey, saveApiKey } from "./apiKey";
-import { SAMPLES } from "./samples";
+import { SAMPLE_GROUPS, SAMPLES } from "./samples";
 
 function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return "Something went wrong. Try again.";
@@ -216,20 +216,23 @@ export default function NewIntakeView({
         <aside className="new-aside">
           <section className="panel">
             <h2>Demo Transcripts</h2>
-            <div className="samples">
-              {SAMPLES.map((sample) => (
-                <button
-                  key={sample.id}
-                  type="button"
-                  className="sample"
-                  aria-pressed={sampleId === sample.id}
-                  onClick={() => pickSample(sample.id)}
-                >
-                  <span className="sample-name">{sample.clientName}</span>
-                  <span className="sample-note">{sample.note}</span>
-                </button>
-              ))}
-            </div>
+            {SAMPLE_GROUPS.map((group) => (
+              <div key={group} className="samples" role="group" aria-label={group}>
+                <h3 className="samples-group">{group}</h3>
+                {SAMPLES.filter((sample) => sample.group === group).map((sample) => (
+                  <button
+                    key={sample.id}
+                    type="button"
+                    className="sample"
+                    aria-pressed={sampleId === sample.id}
+                    onClick={() => pickSample(sample.id)}
+                  >
+                    <span className="sample-name">{sample.clientName}</span>
+                    <span className="sample-note">{sample.note}</span>
+                  </button>
+                ))}
+              </div>
+            ))}
           </section>
 
           <section className="panel panel-quiet">

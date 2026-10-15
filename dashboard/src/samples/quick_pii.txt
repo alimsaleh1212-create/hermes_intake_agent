@@ -1,0 +1,9 @@
+Agency: How do we reach you, Sam?
+
+Sam: Email sam@oakpinecarpentry.com or call (303) 555-0164.
+
+Agency: And where's the workshop?
+
+Sam: 77 Elm Street, Denver, CO 80203. We run a Squarespace site and book jobs in Jobber.
+
+Agency: Thanks, we'll send the access checklist to that email.
